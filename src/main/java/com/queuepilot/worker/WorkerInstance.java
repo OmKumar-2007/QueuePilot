@@ -156,9 +156,8 @@ public class WorkerInstance implements Runnable {
         } catch (InterruptedException e) {
             log.warn("Worker [{}] was interrupted/killed during job [{}] execution", workerModel.getId(), job.getId());
             workerModel.markDead();
-            if (listener != null) {
-                listener.onJobFailed(workerModel.getId(), job.getId(), token, "Worker interrupted or crashed mid-execution", e);
-            }
+            // In crash/failure simulation, the worker terminates silently.
+            // The RecoveryWatchdog detects the dead/unresponsive worker and reclaims the job.
         } catch (Exception e) {
             log.error("Worker [{}] encountered execution error for job [{}]: {}", workerModel.getId(), job.getId(), e.getMessage());
             workerModel.releaseJob(false);
@@ -177,6 +176,9 @@ public class WorkerInstance implements Runnable {
         workerModel.markDead();
         if (executionThread != null && executionThread.isAlive()) {
             executionThread.interrupt();
+            try {
+                executionThread.join(300);
+            } catch (InterruptedException ignored) {}
         }
     }
 

@@ -1,5 +1,8 @@
+/home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/api/JobApiControllerTest.java
 /home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/dag/DependencyGraphTest.java
 /home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/dispatch/DispatchCoordinatorTest.java
 /home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/executor/JobExecutorTest.java
+/home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/persistence/AuditServiceTest.java
+/home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/recovery/RecoveryWatchdogTest.java
 /home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/scheduler/SchedulingPolicyTest.java
 /home/ricing/Documents/code/Projects/QueuePilot_v2/src/test/java/com/queuepilot/worker/WorkerPoolTest.java

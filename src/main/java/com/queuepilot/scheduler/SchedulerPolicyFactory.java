@@ -19,16 +19,19 @@ public class SchedulerPolicyFactory {
     @Autowired
     public SchedulerPolicyFactory(FcFSSchedulingPolicy fcfs,
                                   SjfSchedulingPolicy sjf,
-                                  PriorityAgingSchedulingPolicy priorityAging) {
+                                  PriorityAgingSchedulingPolicy priorityAging,
+                                  MlfqSchedulingPolicy mlfq) {
         registerPolicy(fcfs);
         registerPolicy(sjf);
         registerPolicy(priorityAging);
+        registerPolicy(mlfq);
     }
 
     public SchedulerPolicyFactory() {
         registerPolicy(new FcFSSchedulingPolicy());
         registerPolicy(new SjfSchedulingPolicy());
         registerPolicy(new PriorityAgingSchedulingPolicy());
+        registerPolicy(new MlfqSchedulingPolicy());
     }
 
     public synchronized void registerPolicy(SchedulingPolicy policy) {

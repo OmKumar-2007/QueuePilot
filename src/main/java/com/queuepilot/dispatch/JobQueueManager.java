@@ -33,6 +33,15 @@ public class JobQueueManager {
     private final Map<String, Job> jobStore = new ConcurrentHashMap<>();
     private final DependencyGraph dependencyGraph = new DependencyGraph();
     private final ReentrantLock queueLock = new ReentrantLock();
+    private final com.queuepilot.persistence.AuditService auditService;
+
+    public JobQueueManager(com.queuepilot.persistence.AuditService auditService) {
+        this.auditService = auditService;
+    }
+
+    public JobQueueManager() {
+        this(null);
+    }
 
     /**
      * Submits and registers a new Job into the system with validation and DAG check.
@@ -58,6 +67,9 @@ public class JobQueueManager {
             }
 
             jobStore.put(job.getId(), job);
+            if (auditService != null) {
+                auditService.recordJobCreated(job);
+            }
             log.info("Job [{}] submitted in state [{}] (Priority: {}, Est: {}ms)", 
                     job.getId(), job.getState(), job.getEffectivePriority(), job.getEstimatedDurationMs());
 
@@ -111,6 +123,9 @@ public class JobQueueManager {
             Instant leaseExpiry = Instant.now().plusMillis(leaseDurationMs);
 
             job.markRunning(worker.getId(), attemptToken, leaseExpiry);
+            if (auditService != null) {
+                auditService.recordJobAttemptStarted(job, worker.getId(), attemptToken);
+            }
             log.info("Job [{}] claimed by worker [{}] with attempt token [{}] until [{}]",
                     job.getId(), worker.getId(), attemptToken, leaseExpiry);
 
@@ -130,6 +145,9 @@ public class JobQueueManager {
         synchronized (job) {
             if (job.getState() == JobState.RUNNING && attemptToken.equals(job.getAttemptToken())) {
                 job.updateProgress(progressPercent, message);
+                if (auditService != null) {
+                    auditService.recordJobProgress(job);
+                }
                 return true;
             }
             log.warn("Rejected stale progress update for job [{}] with token [{}]", jobId, attemptToken);
@@ -168,6 +186,9 @@ public class JobQueueManager {
             }
 
             job.markCompleted(result);
+            if (auditService != null) {
+                auditService.recordJobCompleted(job, result);
+            }
             log.info("Job [{}] marked COMPLETED. Evaluating dependent DAG jobs...", jobId);
 
             // Unblock dependent jobs whose prerequisites are now satisfied
@@ -202,6 +223,9 @@ public class JobQueueManager {
                 log.error("Job [{}] exhausted retries ({}/{}). Marking FAILED: {}",
                         jobId, job.getRetryCount(), job.getMaxRetries(), reason);
                 job.markFailed(reason);
+            }
+            if (auditService != null) {
+                auditService.recordJobAttemptFailed(job, attemptToken, reason);
             }
             return true;
         } finally {

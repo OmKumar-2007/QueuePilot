@@ -75,11 +75,11 @@ public class Worker implements Serializable {
 
     public synchronized void markDead() {
         this.status = WorkerStatus.DEAD;
-        this.currentJobId = null;
     }
 
     public synchronized void markAlive() {
-        this.status = (this.currentJobId != null) ? WorkerStatus.BUSY : WorkerStatus.IDLE;
+        this.status = WorkerStatus.IDLE;
+        this.currentJobId = null;
         this.lastHeartbeat = Instant.now();
     }
 

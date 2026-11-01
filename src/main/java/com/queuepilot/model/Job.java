@@ -23,6 +23,7 @@ public abstract class Job implements Serializable {
     private int basePriority;
     private int effectivePriority;
     private long estimatedDurationMs;
+    private int mlfqLevel = 0;
 
     private final Set<String> dependencies = new HashSet<>();
     private final Set<String> requiredCapabilities = new HashSet<>();
@@ -191,6 +192,8 @@ public abstract class Job implements Serializable {
     public int getBasePriority() { return basePriority; }
     public void setBasePriority(int basePriority) { this.basePriority = basePriority; }
     public synchronized int getEffectivePriority() { return effectivePriority; }
+    public synchronized int getMlfqLevel() { return mlfqLevel; }
+    public synchronized void setMlfqLevel(int mlfqLevel) { this.mlfqLevel = Math.max(0, mlfqLevel); }
     public long getEstimatedDurationMs() { return estimatedDurationMs; }
     public void setEstimatedDurationMs(long estimatedDurationMs) { this.estimatedDurationMs = estimatedDurationMs; }
     public int getRetryCount() { return retryCount; }

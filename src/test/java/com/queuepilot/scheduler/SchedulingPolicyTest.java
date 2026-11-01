@@ -21,12 +21,14 @@ class SchedulingPolicyTest {
     private FcFSSchedulingPolicy fcfs;
     private SjfSchedulingPolicy sjf;
     private PriorityAgingSchedulingPolicy priorityAging;
+    private MlfqSchedulingPolicy mlfq;
 
     @BeforeEach
     void setUp() {
         fcfs = new FcFSSchedulingPolicy();
         sjf = new SjfSchedulingPolicy();
         priorityAging = new PriorityAgingSchedulingPolicy(2, 2); // age every 2 seconds by +2
+        mlfq = new MlfqSchedulingPolicy(5000L, 15000L, 10L); // Level 0 <= 5s, Level 1 <= 15s, Boost 10s
     }
 
     @Test
@@ -88,5 +90,42 @@ class SchedulingPolicyTest {
 
         assertTrue(selected.isPresent());
         assertEquals("Sort-Task", selected.get().getName(), "Worker should only select job it has capabilities for");
+    }
+
+    @Test
+    @DisplayName("MLFQ should prioritize short tasks in Tier 0 and demote longer batch tasks to Tier 1 and 2")
+    void testMlfqTieringAndDemotion() {
+        Instant now = Instant.now();
+        Job shortJob = new SortingJob("Short-Task", 1, 3000L, List.of(1), "QUICKSORT");   // <= 5s -> Tier 0
+        Job mediumJob = new SortingJob("Medium-Task", 1, 10000L, List.of(1), "QUICKSORT"); // 5s-15s -> Tier 1
+        Job longJob = new SortingJob("Long-Task", 1, 25000L, List.of(1), "QUICKSORT");     // > 15s -> Tier 2
+
+        List<Job> ordered = mlfq.orderJobs(List.of(longJob, mediumJob, shortJob), now);
+
+        assertEquals("Short-Task", ordered.get(0).getName());
+        assertEquals(0, ordered.get(0).getMlfqLevel(), "Short task must be in Tier 0");
+
+        assertEquals("Medium-Task", ordered.get(1).getName());
+        assertEquals(1, ordered.get(1).getMlfqLevel(), "Medium task must be in Tier 1");
+
+        assertEquals("Long-Task", ordered.get(2).getName());
+        assertEquals(2, ordered.get(2).getMlfqLevel(), "Long task must be demoted to Tier 2");
+    }
+
+    @Test
+    @DisplayName("MLFQ anti-starvation boost should promote all jobs back to Tier 0")
+    void testMlfqAntiStarvationBoost() {
+        Instant t0 = Instant.now();
+        Job longJob = new SortingJob("Long-Task", 1, 30000L, List.of(1), "QUICKSORT");
+        
+        // Initial placement puts longJob at Tier 2
+        mlfq.orderJobs(List.of(longJob), t0);
+        assertEquals(2, longJob.getMlfqLevel());
+
+        // Simulate time advancing past the boost interval (10s)
+        Instant t15 = t0.plusSeconds(15);
+        List<Job> boosted = mlfq.orderJobs(List.of(longJob), t15);
+
+        assertEquals(0, boosted.get(0).getMlfqLevel(), "Anti-starvation boost must reset job to Tier 0");
     }
 }
