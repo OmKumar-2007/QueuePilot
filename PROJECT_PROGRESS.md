@@ -2,38 +2,42 @@
 
 ## Roadmap
 
-| # | Phase | Status |
-|---|---|---|
-| 0 | Repository and requirements audit | ✅ Done (2026-11-03) |
-| 1 | System architecture and design | ✅ Proposed (2026-11-03) — awaiting team review |
-| 2 | Project foundation: multi-module Maven, Spring Boot, PostgreSQL + Flyway, health API, config, logging, security skeleton | Next |
-| 3 | Core job management: task definitions, jobs, validation, persistence, REST | Planned |
-| 4 | Scheduling engine: policies, readiness, fairness, quotas, claim logic | Planned |
-| 5 | Task plugin architecture: `task-api`, built-in plugins, manifests, "add a task without touching the scheduler" demo | Planned |
-| 6 | Worker processes: registration, claiming, thread pool, progress, results, artifacts | Planned |
-| 7 | Reliability: heartbeats, leases, timeouts, retries/backoff, fencing, failure simulation | Planned |
-| 8 | Workflows: DAG submission, cycle detection, blocked/skipped, progress | Planned |
-| 9 | Sandboxed container execution (stretch) | Planned |
-| 10 | Dashboard (all pages) | Planned — simple pages are added alongside Phases 3–8 so each phase is demoable |
-| 11 | `queuepilot-benchmarks` | Planned |
-| 12 | Integration, failure testing, security review, demo prep | Planned |
+| # | Phase | Status | Main artefacts |
+|---|---|---|---|
+| 0 | Repository and requirements audit | ✅ Done | `docs/requirements/phase0-audit.md`, git tag `v0-legacy` |
+| 1 | Architecture and design | ✅ Done | `docs/architecture/*`, `docs/decisions/ADR-001…010` |
+| 2 | Foundation | ✅ Done | Multi-module Maven build, Spring Boot coordinator, Flyway schema, H2 (PostgreSQL mode) default + `postgres` profile, health API, security skeleton, secrets handling |
+| 3 | Core job management | ✅ Done | Task definitions, job submission/validation/persistence, queries, cancel, quotas, deadlines |
+| 4 | Scheduling engine | ✅ Done | FCFS, Priority+Aging, SJF, readiness, round-robin queue fairness, capability matching, race-free claims |
+| 5 | Plugin architecture | ✅ Done | `queuepilot-task-api`, 4 built-in tasks, manifests, `queuepilot-example-plugin` added without core changes |
+| 6 | Worker processes | ✅ Done | `queuepilot-worker`: registration, claim loop, slot semaphore, real progress, files, timeouts |
+| 7 | Reliability | ✅ Done | Heartbeats, leases, fencing tokens, retry with backoff, task timeouts, offline detection, kill/freeze simulation, drain |
+| 8 | Workflows | ✅ Done | DAG submission, cycle detection, release on success, transitive skip, graph view |
+| 9 | Isolated execution | ⚠️ Implemented, **not verified** | `ContainerTaskRunner`, `DockerCommandBuilder` (sandbox flags unit-tested), isolation tests skip without Docker; example Python task |
+| 10 | Dashboard | ✅ Done | 8 pages, admin login, live polling, DAG rendering, failure simulation controls |
+| 11 | Benchmarks | ✅ Done | Separate module: simulated policy comparison, measured worker scaling, reports + publishing |
+| 12 | Integration and verification | ✅ Done | Full test suite, live end-to-end run with real crash, documentation |
 
-Order change vs. the original roadmap: minimal dashboard views are built with each backend phase instead of all at the end, so the team can demo progress weekly. Phase 10 then polishes and completes them.
+## Verification status (2026-11-03)
 
-## Current state
+- `./mvnw verify`: 85 tests, 0 failures; container isolation tests do not run (Docker absent). See `docs/testing/testing-strategy.md` for the requirement-to-test map.
+- Live run: coordinator + 2 worker processes; plugin routing, real crash (exit 137) and recovery on the other worker, file artifacts, workflow ordering, cyclic workflow rejection all confirmed.
+- Benchmarks: simulated (3 scenarios × 3 policies × 5 seeds) and measured (1/2/4 workers, 2 workloads) reports produced and displayed.
+- Dashboard: all pages checked in a browser; no console errors.
 
-- Original prototype preserved: git tag `v0-legacy`; its 26 tests pass on JDK 21 via `./mvnw test`.
-- New documentation: requirements, audit, architecture, database, protocol, plugin contract, 10 ADRs.
-- No new application code yet.
+## Known limitations
 
-## Known issues / risks
+- Container isolation untested on real Docker (Phase 9).
+- Default database is embedded H2 in PostgreSQL mode; PostgreSQL is supported (`postgres` profile) and exercised by one integration test using embedded PostgreSQL binaries, but no locally installed PostgreSQL server was used.
+- Single coordinator; workers are local processes; no multi-machine testing.
+- Clients are not authenticated; `X-Client-Id` only drives quotas.
+- The scheduler considers the 500 oldest claimable jobs per decision.
+- Progress updates are throttled to two per second per attempt.
+- No cancellation of running jobs (by design, SRS U4).
 
-- PostgreSQL and Docker are not installed on the development machine. PostgreSQL is needed from Phase 2; Docker only for Phase 9.
-- Maven is only available through the wrapper (`mvnw`), which is fine.
-- Client authentication is out of scope for v1.0 (ADR-008).
+## Possible next steps
 
-## Next steps
-
-1. Team reviews `docs/architecture/architecture.md` and the ADRs.
-2. Install PostgreSQL 16+ locally.
-3. Start Phase 2.
+1. Verify Phase 9 on a machine with Docker; publish the example image to a registry and pin its digest.
+2. Client authentication (API keys) so per-client quotas cannot be bypassed.
+3. Server-Sent Events instead of polling for the dashboard.
+4. A fourth policy (e.g. MLFQ or weighted fair queuing) to demonstrate scheduler extensibility.

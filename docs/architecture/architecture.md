@@ -1,6 +1,6 @@
 # QueuePilot v1.0 — System Architecture
 
-Status: **Proposed (Phase 1)**. Decisions referenced as ADR-00x live in `docs/decisions/`.
+Status: **Implemented** (v1.0). Decisions referenced as ADR-00x live in `docs/decisions/`. Container isolation (Phase 9) is implemented but not yet verified on Docker.
 
 ## 1. The one rule
 

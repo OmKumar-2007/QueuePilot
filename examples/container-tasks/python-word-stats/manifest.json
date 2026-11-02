@@ -1,0 +1,29 @@
+{
+  "taskType": "python-word-stats",
+  "version": "1.0.0",
+  "displayName": "Python word statistics (container)",
+  "description": "Counts words with a Python script inside a sandboxed container.",
+  "executorKind": "CONTAINER",
+  "requiredCapabilities": [],
+  "inputSchema": {
+    "fields": [
+      { "name": "text", "type": "STRING", "required": true, "maxLength": 60000 },
+      { "name": "topN", "type": "INTEGER", "required": false, "min": 1, "max": 50 }
+    ]
+  },
+  "outputSchema": {
+    "fields": [
+      { "name": "wordCount", "type": "INTEGER" },
+      { "name": "uniqueWords", "type": "INTEGER" }
+    ]
+  },
+  "resources": { "cpuMillis": 500, "memoryMb": 128 },
+  "timeoutSeconds": 60,
+  "maxRetries": 1,
+  "defaultPriority": 5,
+  "defaultEstimatedMs": 2000,
+  "container": {
+    "image": "REPLACE_WITH_YOUR_REGISTRY/python-word-stats@sha256:REPLACE_WITH_DIGEST",
+    "command": ["python", "/app/stats.py"]
+  }
+}

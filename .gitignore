@@ -6,3 +6,4 @@ target/
 data/
 *.log
 .env
+benchmark-results/

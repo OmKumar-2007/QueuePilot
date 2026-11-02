@@ -5,15 +5,14 @@ PostgreSQL is the **source of truth** (ADR-004). Schema is created by Flyway SQL
 ```mermaid
 erDiagram
     TASK_DEFINITION ||--o{ JOB : "pins version"
-    CLIENT_QUEUE ||--o{ JOB : contains
     WORKFLOW |o--o{ JOB : groups
     JOB ||--o{ JOB_DEPENDENCY : "depends on"
     JOB ||--o{ ATTEMPT : has
     WORKER ||--o{ ATTEMPT : runs
-    WORKER ||--o{ WORKER_CAPABILITY : advertises
     JOB }o--o{ ARTIFACT : "input / output"
     JOB ||--o{ SYSTEM_EVENT : "described by"
     BENCHMARK_REPORT
+    SCHEDULER_SETTINGS
 
     TASK_DEFINITION {
         uuid id PK
@@ -33,11 +32,6 @@ erDiagram
         boolean enabled
         timestamp created_at
     }
-    CLIENT_QUEUE {
-        varchar name PK
-        int weight
-        boolean paused
-    }
     WORKFLOW {
         uuid id PK
         varchar name
@@ -48,7 +42,9 @@ erDiagram
         uuid id PK
         uuid task_definition_id FK
         uuid workflow_id FK
-        varchar queue_name FK
+        varchar queue_name "logical queue"
+        varchar executor_kind
+        text required_capabilities "copied from task"
         varchar client_id
         varchar state
         int priority
@@ -60,6 +56,9 @@ erDiagram
         int progress_percent
         varchar progress_message
         uuid current_attempt_id
+        varchar current_worker_id
+        int max_retries "copied from task"
+        int timeout_seconds "copied from task"
         int attempts_used
         timestamp submitted_at
         timestamp start_at
@@ -91,17 +90,12 @@ erDiagram
         varchar name
         varchar status
         int concurrency_limit
-        int active_attempts
+        text capabilities "comma list"
+        varchar pending_command "KILL / FREEZE"
         text supported_tasks "type@version list"
         varchar token_hash
-        bigint completed_count
-        bigint failed_count
         timestamp registered_at
         timestamp last_heartbeat_at
-    }
-    WORKER_CAPABILITY {
-        varchar worker_id PK,FK
-        varchar capability PK
     }
     ARTIFACT {
         uuid id PK
@@ -123,6 +117,13 @@ erDiagram
         uuid attempt_id
         text message
     }
+    SCHEDULER_SETTINGS {
+        int id PK "single row"
+        varchar active_policy
+        int aging_interval_seconds
+        int aging_step
+        int max_active_jobs_per_client
+    }
     BENCHMARK_REPORT {
         uuid id PK
         varchar kind "SIMULATED | MEASURED"
@@ -139,6 +140,8 @@ erDiagram
 - **Indexes:** `job(state, ready_at)`, `job(client_id, state)`, `attempt(state, lease_expires_at)`, `worker(status, last_heartbeat_at)`, unique `task_definition(task_type, version)`.
 - **Tokens are hashed** (SHA-256) — a database leak does not let anyone impersonate a worker or attempt.
 - **Optimistic locking:** `job.version` is incremented by every update; a claim that loses a race gets an `OptimisticLockException` and the scheduler moves to the next candidate.
+- **Derived, not stored:** a worker's running/succeeded/failed counts are computed from `attempt`, so they can never drift. Queues are just the `queue_name` column; capabilities are comma lists (small, read together).
+- **Task settings are copied onto the job** (capabilities, retries, timeout) so a job keeps the rules it was accepted with.
 - **History:** the full story of a job is `attempt` rows + `system_event` rows; nothing is deleted during the project demonstration.
 - **Artifacts** hold metadata only; bytes live under `./data/artifacts/<storage_key>` where `storage_key` is a generated UUID, never a user-supplied name.
 - **Benchmark reports** are imported from files produced by `queuepilot-benchmarks`; the raw CSV stays on disk and is referenced, not copied into the DB.
