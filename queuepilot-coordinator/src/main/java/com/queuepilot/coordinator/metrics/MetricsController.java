@@ -47,4 +47,10 @@ public class MetricsController {
 
     public record Health(String status, boolean database, String version, Instant time) {
     }
+
+    /** Lets the dashboard check administrator credentials before using them. */
+    @GetMapping("/api/admin/session")
+    public java.util.Map<String, Object> adminSession(java.security.Principal principal) {
+        return java.util.Map.of("admin", true, "user", principal.getName());
+    }
 }
