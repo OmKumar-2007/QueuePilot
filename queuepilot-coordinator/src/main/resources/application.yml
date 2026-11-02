@@ -1,0 +1,54 @@
+# QueuePilot coordinator configuration.
+# Default profile: embedded H2 database stored in ./data (PostgreSQL compatibility mode) so the
+# project runs with nothing installed. Use the "postgres" profile for PostgreSQL (see docs/guides).
+server:
+  port: 8080
+  address: 127.0.0.1
+  error:
+    include-stacktrace: never
+    include-message: never
+
+spring:
+  application:
+    name: queuepilot-coordinator
+  datasource:
+    url: jdbc:h2:file:${queuepilot.data-dir}/db/queuepilot;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 51MB
+  jackson:
+    default-property-inclusion: always
+
+queuepilot:
+  data-dir: ./data
+  heartbeat-interval-ms: 2000
+  lease-duration-ms: 10000
+  worker-timeout-ms: 10000
+  claim-poll-ms: 1000
+  recovery-interval-ms: 1000
+  recovery-enabled: true
+  retry-base-delay-ms: 2000
+  retry-max-delay-ms: 60000
+  max-artifact-bytes: 52428800
+  max-input-bytes: 65536
+  max-output-bytes: 262144
+  admin-user: ${QP_ADMIN_USER:admin}
+  admin-password: ${QP_ADMIN_PASSWORD:}
+  worker-secret: ${QP_WORKER_SECRET:}
+
+logging:
+  level:
+    root: INFO
+    org.hibernate.orm.deprecation: WARN

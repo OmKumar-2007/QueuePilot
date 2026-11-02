@@ -1,0 +1,4 @@
+com.queuepilot.tasks.builtin.SortingTask
+com.queuepilot.tasks.builtin.TextAnalysisTask
+com.queuepilot.tasks.builtin.MonteCarloPiTask
+com.queuepilot.tasks.builtin.FileChecksumTask

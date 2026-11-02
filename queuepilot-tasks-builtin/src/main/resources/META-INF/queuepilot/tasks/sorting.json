@@ -1,0 +1,30 @@
+{
+  "taskType": "sorting",
+  "version": "1.0.0",
+  "displayName": "Sort numbers",
+  "description": "Sorts a list of integers, or `count` generated integers, with merge sort or heap sort.",
+  "executorKind": "JAVA_PLUGIN",
+  "requiredCapabilities": ["cpu"],
+  "inputSchema": {
+    "fields": [
+      { "name": "count", "type": "INTEGER", "required": false, "min": 1, "max": 50000000, "description": "Generate this many random numbers (ignored when 'numbers' is given)" },
+      { "name": "numbers", "type": "INTEGER_LIST", "required": false, "maxItems": 5000, "description": "Explicit numbers to sort" },
+      { "name": "algorithm", "type": "ENUM", "required": false, "values": ["MERGE", "HEAP"], "description": "Sorting algorithm (default MERGE)" },
+      { "name": "seed", "type": "INTEGER", "required": false, "description": "Random seed for generated data" }
+    ]
+  },
+  "outputSchema": {
+    "fields": [
+      { "name": "count", "type": "INTEGER" },
+      { "name": "min", "type": "INTEGER" },
+      { "name": "max", "type": "INTEGER" },
+      { "name": "verifiedSorted", "type": "BOOLEAN" },
+      { "name": "sortMs", "type": "INTEGER" }
+    ]
+  },
+  "resources": { "cpuMillis": 1000, "memoryMb": 1024 },
+  "timeoutSeconds": 300,
+  "maxRetries": 3,
+  "defaultPriority": 5,
+  "defaultEstimatedMs": 5000
+}

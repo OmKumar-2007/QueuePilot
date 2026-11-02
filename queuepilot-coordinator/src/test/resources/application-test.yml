@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:queuepilot-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+
+queuepilot:
+  data-dir: target/test-data
+  recovery-enabled: false
+  admin-password: test-admin
+  worker-secret: test-secret
+  retry-base-delay-ms: 1000
+  retry-max-delay-ms: 8000
+  lease-duration-ms: 10000
+  worker-timeout-ms: 10000
+
+logging:
+  level:
+    com.queuepilot: WARN

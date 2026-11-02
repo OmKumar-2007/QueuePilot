@@ -1,0 +1,7 @@
+# Activate with: --spring.profiles.active=postgres
+# Credentials come from environment variables; nothing secret is committed.
+spring:
+  datasource:
+    url: ${QP_DB_URL:jdbc:postgresql://localhost:5432/queuepilot}
+    username: ${QP_DB_USER:queuepilot}
+    password: ${QP_DB_PASSWORD:}
