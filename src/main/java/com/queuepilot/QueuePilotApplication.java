@@ -1,0 +1,12 @@
+package com.queuepilot;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class QueuePilotApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(QueuePilotApplication.class, args);
+    }
+}
