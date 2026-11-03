@@ -81,13 +81,22 @@ else:
 
 Retryable: lease expiry, abandonment, timeouts, unexpected exceptions and `TaskFailure.retryable`. Permanent: `TaskFailure.permanent` (e.g. input that passes the schema but is unusable) and oversize output. With the built-in default `maxRetries = 3` a job runs at most 4 times.
 
-## Failure simulation
+## Worker controls and failure simulation
+
+Commands travel on heartbeat replies (several are delivered together, comma-separated, in order).
 
 | Button | Mechanism | What you should see |
 |---|---|---|
-| Simulate crash | `KILL` delivered on next heartbeat; worker calls `Runtime.halt(137)` | Worker OFFLINE, attempt ABANDONED, job retried elsewhere |
-| Freeze heartbeats | `FREEZE`; worker keeps computing but stops heartbeating | Lease expires, retry elsewhere, frozen worker's late `complete` rejected with 409 |
+| Pause / Resume | Status PAUSED + `PAUSE`: claim loop stops; running tasks wait at their next progress checkpoint (`PauseGate`); heartbeats continue, so leases stay valid. `RESUME` releases them | Jobs stay RUNNING with frozen progress, then continue on the same attempt |
+| Interrupt | `INTERRUPT`: every running attempt is cancelled and reported as `INTERRUPTED` (retryable) | Jobs requeued and picked up again (attempt + 1) |
+| Freeze | `FREEZE`: no heartbeats for `--freeze-ms` (20 s); tasks keep computing | Worker OFFLINE after 10 s, attempts ABANDONED and retried elsewhere; the thawed worker gets `REREGISTER`, drops the stale attempts and registers again |
+| Crash | `KILL`: `Runtime.halt(137)` without reporting | Worker OFFLINE, attempts ABANDONED, jobs retried elsewhere |
 | Drain | No new claims; current attempts finish | Slots empty out |
+| Add worker | `WorkerLauncher` starts the configured worker jar as a new process (demo pacing on) | A new worker registers |
+
+## Demo pacing
+
+`--pace-ms N` makes `WorkerTaskContext` wait N ms for every percent of progress a task reports (and fills in skipped percentages), so even fast tasks take at least 100 x N ms and the progress bar moves smoothly. It changes nothing in the computation, workers report it at registration (shown on the dashboard), and the job output gets `demoPacingMsPerPercent`, so paced runs are never mistaken for real speed. Benchmarks start workers without it.
 
 ## Guarantees (and non-guarantees)
 

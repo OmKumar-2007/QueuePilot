@@ -12,9 +12,17 @@ import java.util.List;
 public class WorkerController {
 
     private final WorkerRegistryService registry;
+    private final WorkerLauncher launcher;
 
-    public WorkerController(WorkerRegistryService registry) {
+    public WorkerController(WorkerRegistryService registry, WorkerLauncher launcher) {
         this.registry = registry;
+        this.launcher = launcher;
+    }
+
+    /** Starts one more worker process on this machine (demo convenience). */
+    @PostMapping("/api/admin/workers/launch")
+    public WorkerLauncher.Launched launch(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "2") int slots) {
+        return launcher.launch(slots);
     }
 
     @GetMapping("/api/workers")
@@ -22,8 +30,11 @@ public class WorkerController {
         return registry.list();
     }
 
-    /** action = drain | resume | disable | enable */
-    @PostMapping("/api/admin/workers/{id}/{action:drain|resume|disable|enable}")
+    /**
+     * action = drain | pause | resume | interrupt | disable | enable.
+     * pause holds running tasks (leases stay alive); interrupt stops running tasks and requeues them.
+     */
+    @PostMapping("/api/admin/workers/{id}/{action:drain|pause|resume|interrupt|disable|enable}")
     public void changeStatus(@PathVariable String id, @PathVariable String action) {
         registry.changeStatus(id, action);
     }

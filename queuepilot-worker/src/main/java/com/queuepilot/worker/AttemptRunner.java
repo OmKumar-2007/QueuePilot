@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -29,6 +31,7 @@ import java.util.stream.Stream;
  *   <li>finished normally -> complete</li>
  *   <li>threw {@link TaskFailure} -> fail (retryable flag from the task)</li>
  *   <li>local timeout -> fail with TIMEOUT (retryable)</li>
+ *   <li>interrupted by an administrator -> fail with INTERRUPTED (retryable, so it is requeued)</li>
  *   <li>revoked by the coordinator or shutdown -> report nothing; the attempt is no longer ours</li>
  * </ul>
  */
@@ -43,11 +46,13 @@ public class AttemptRunner implements Runnable {
     private final ActiveAttempts active;
     private final ScheduledExecutorService timer;
     private final Path workRoot;
+    private final long paceMsPerPercent;
+    private final PauseGate pauseGate;
     private final Runnable onFinished;
 
     public AttemptRunner(Assignment assignment, TaskExecutorRegistry registry, ContainerTaskRunner containerRunner,
                          CoordinatorApi api, ActiveAttempts active, ScheduledExecutorService timer, Path workRoot,
-                         Runnable onFinished) {
+                         long paceMsPerPercent, PauseGate pauseGate, Runnable onFinished) {
         this.assignment = assignment;
         this.registry = registry;
         this.containerRunner = containerRunner;
@@ -55,6 +60,8 @@ public class AttemptRunner implements Runnable {
         this.active = active;
         this.timer = timer;
         this.workRoot = workRoot;
+        this.paceMsPerPercent = paceMsPerPercent;
+        this.pauseGate = pauseGate;
         this.onFinished = onFinished;
     }
 
@@ -62,7 +69,7 @@ public class AttemptRunner implements Runnable {
     public void run() {
         Thread thread = Thread.currentThread();
         Path workDir = workRoot.resolve(assignment.attemptId());
-        WorkerTaskContext context = new WorkerTaskContext(api, assignment, workDir);
+        WorkerTaskContext context = new WorkerTaskContext(api, assignment, workDir, paceMsPerPercent, pauseGate);
         active.add(assignment.attemptId(), assignment.fencingToken(), context);
         ScheduledFuture<?> timeout = timer.schedule(() -> {
             context.cancel(CancelReason.TIMED_OUT);
@@ -73,11 +80,17 @@ public class AttemptRunner implements Runnable {
         try {
             Files.createDirectories(workDir);
             TaskOutput output = execute(context);
+            context.reportProgress(100, "Finishing");
             if (context.isCancelled()) {
                 reportStopped(context, "Task returned after being cancelled");
             } else {
+                Map<String, Object> values = new LinkedHashMap<>(output.values());
+                if (paceMsPerPercent > 0) {
+                    // Make paced (demo) runs recognisable in the job output.
+                    values.put("demoPacingMsPerPercent", paceMsPerPercent);
+                }
                 boolean accepted = api.complete(assignment.attemptId(), new CompletionReport(
-                        assignment.fencingToken(), output.values(), output.artifactIds()));
+                        assignment.fencingToken(), values, output.artifactIds()));
                 log.info("Attempt {} of job {} completed{}", assignment.attemptNumber(), assignment.jobId(),
                         accepted ? "" : " but the coordinator rejected the result (stale attempt)");
             }
@@ -120,6 +133,8 @@ public class AttemptRunner implements Runnable {
     private void reportStopped(WorkerTaskContext context, String detail) {
         if (context.cancelReason() == CancelReason.TIMED_OUT) {
             report("TIMEOUT", "Exceeded " + assignment.timeoutSeconds() + "s", true);
+        } else if (context.cancelReason() == CancelReason.INTERRUPTED) {
+            report("INTERRUPTED", "Interrupted by an administrator", true);
         } else {
             log.info("Attempt {} stopped ({}): {}", assignment.attemptId(), context.cancelReason(), detail);
         }

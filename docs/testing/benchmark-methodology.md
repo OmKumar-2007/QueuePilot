@@ -23,7 +23,7 @@ Example result on this machine (200 jobs, 4 workers, 5 seeds, `PRIORITY_SKEW`): 
 
 ```bash
 java -jar queuepilot-benchmarks/target/queuepilot-benchmarks-1.0.0.jar execute \
-     --worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar \
+     --worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar \
      --worker-counts 1,2,4 --slots 1 \
      --workloads "monte-carlo-pi:samples=40000000;sorting:count=2000000" \
      --jobs 8 --warmup 1 --reps 3 --publish

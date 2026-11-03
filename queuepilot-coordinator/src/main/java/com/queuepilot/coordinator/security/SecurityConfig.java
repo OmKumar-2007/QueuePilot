@@ -1,6 +1,7 @@
 package com.queuepilot.coordinator.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.queuepilot.coordinator.config.QueuePilotProperties;
 import com.queuepilot.coordinator.web.ApiError;
 import com.queuepilot.coordinator.worker.WorkerRegistryService;
 import jakarta.servlet.http.HttpServletResponse;
@@ -8,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.User;
@@ -25,7 +27,8 @@ import java.util.List;
 /**
  * Security model (ADR-008):
  * <ul>
- *   <li>{@code /api/admin/**}: HTTP Basic, role ADMIN</li>
+ *   <li>{@code /api/admin/**}: open by default (local demo, coordinator listens on 127.0.0.1 only);
+ *       HTTP Basic with role ADMIN when {@code queuepilot.admin-auth-enabled=true}</li>
  *   <li>{@code /api/worker/register}: open, but requires the enrollment secret in the body</li>
  *   <li>{@code /api/worker/**}: per-worker bearer token, role WORKER</li>
  *   <li>everything else (client API, dashboard): open</li>
@@ -37,7 +40,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, WorkerRegistryService workerRegistry,
-                                                   ObjectMapper objectMapper) throws Exception {
+                                                   ObjectMapper objectMapper, QueuePilotProperties properties) throws Exception {
+        boolean adminAuth = properties.adminAuthEnabled();
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(basic -> basic.authenticationEntryPoint((request, response, e) ->
@@ -48,7 +52,9 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, e) ->
                                 writeError(response, objectMapper, HttpServletResponse.SC_FORBIDDEN, "FORBIDDEN", "Not allowed")))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**").access((authentication, context) ->
+                                new AuthorizationDecision(!adminAuth || authentication.get().getAuthorities().stream()
+                                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))))
                         .requestMatchers(HttpMethod.POST, "/api/worker/register").permitAll()
                         .requestMatchers("/api/worker/**").hasRole("WORKER")
                         .anyRequest().permitAll())

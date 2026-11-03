@@ -30,10 +30,16 @@ spring:
       max-request-size: 51MB
   jackson:
     default-property-inclusion: always
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # The dashboard is small; always revalidate so a rebuilt coordinator never serves stale JS.
+          no-cache: true
 
 queuepilot:
   data-dir: ./data
-  heartbeat-interval-ms: 2000
+  heartbeat-interval-ms: 1000
   lease-duration-ms: 10000
   worker-timeout-ms: 10000
   claim-poll-ms: 1000
@@ -44,9 +50,14 @@ queuepilot:
   max-artifact-bytes: 52428800
   max-input-bytes: 65536
   max-output-bytes: 262144
+  # Admin endpoints are open by default for the local demo. Set QP_ADMIN_AUTH=true to require a password.
+  admin-auth-enabled: ${QP_ADMIN_AUTH:false}
   admin-user: ${QP_ADMIN_USER:admin}
   admin-password: ${QP_ADMIN_PASSWORD:}
   worker-secret: ${QP_WORKER_SECRET:}
+  # "Add worker" in the dashboard starts this jar; launched workers use demo pacing so jobs are watchable.
+  worker-jar: queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar
+  launched-worker-pace-ms: 150
 
 logging:
   level:

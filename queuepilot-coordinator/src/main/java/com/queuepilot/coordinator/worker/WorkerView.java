@@ -22,7 +22,8 @@ public record WorkerView(String id,
                          long failedAttempts,
                          Instant registeredAt,
                          Instant lastHeartbeatAt,
-                         String pendingCommand) {
+                         String pendingCommand,
+                         long demoPaceMs) {
 
     public static WorkerView from(WorkerEntity w, Map<AttemptState, Long> counts, List<AttemptEntity> running) {
         long failed = counts.getOrDefault(AttemptState.FAILED, 0L) + counts.getOrDefault(AttemptState.TIMED_OUT, 0L)
@@ -31,6 +32,6 @@ public record WorkerView(String id,
         return new WorkerView(w.getId(), w.getName(), w.getStatus(), w.getConcurrencyLimit(), running.size(), free,
                 w.capabilitySet(), w.supportedTaskSet(), running.stream().map(AttemptEntity::getJobId).toList(),
                 counts.getOrDefault(AttemptState.SUCCEEDED, 0L), failed, w.getRegisteredAt(), w.getLastHeartbeatAt(),
-                w.getPendingCommand());
+                w.getPendingCommand(), w.getDemoPaceMs());
     }
 }

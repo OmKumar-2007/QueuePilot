@@ -15,10 +15,12 @@ Clients submit jobs for **registered task types**. A **coordinator** validates a
 | Jobs | Schema validation, priorities, queues, scheduled start, deadlines with at-risk/overdue status, cancel-before-start, per-client limits |
 | Scheduling | FCFS, Priority with Aging, SJF (switchable live); round-robin fairness across queues; capability + capacity matching |
 | Workers | Separate JVM processes; concurrency slots; real progress; input/output files; local timeouts |
-| Reliability | Heartbeats, leases, fencing tokens, bounded retry with exponential backoff, task timeouts, offline detection, failure simulation (kill / freeze) |
+| Reliability | Heartbeats, leases, fencing tokens, bounded retry with exponential backoff, task timeouts, offline detection |
+| Worker controls | Pause / resume (jobs hold in place), interrupt (jobs stop and are retried), freeze (heartbeats stop for 20 s), crash (process exits), add worker from the dashboard |
+| Demo pacing | Optional `--pace-ms` per worker so jobs take ~15-30 s and can be watched; recorded in each job's output, never used for benchmarks |
 | Workflows | DAG submission, cycle rejection, parallel branches, skip-on-failure propagation, graph view |
 | Isolation (stretch) | Container runner with no network, read-only FS, CPU/memory/PID limits, non-root (not verified on this machine: Docker absent) |
-| Dashboard | Overview, submit, jobs, workflows, task registry, scheduler, workers, benchmarks |
+| Dashboard | Live view (workers and their running jobs, controls, up next, activity), jobs, submit, workflows, scheduler, tasks, benchmarks |
 | Benchmarks | Separate module: simulated policy comparison + measured execution with worker scaling |
 
 ## Technology
@@ -51,19 +53,19 @@ Run all commands from the repository root:
 java -jar queuepilot-coordinator/target/queuepilot-coordinator-1.0.0.jar
 ```
 
-Open http://localhost:8080. On first start the coordinator writes a random admin password to `data/admin-password.txt` and a worker enrollment secret to `data/worker-secret.txt` (both git-ignored). Set `QP_ADMIN_PASSWORD` / `QP_WORKER_SECRET` to choose them yourself.
+Open http://localhost:8080. There is no admin login: the coordinator only listens on 127.0.0.1, and administrator actions are open for the local demo (set `QP_ADMIN_AUTH=true` and `QP_ADMIN_PASSWORD` to require HTTP Basic). Workers enrol with a secret the coordinator writes to `data/worker-secret.txt` (git-ignored), or `QP_WORKER_SECRET`.
 
 Start workers in other terminals:
 
 ```bash
-java -jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar --name worker-1 --slots 2
+java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-1 --slots 2
 ```
 
 ```bash
-java -jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar --name worker-2 --slots 2 --capabilities cpu,io,text
+java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-2 --slots 2 --capabilities cpu,io,text
 ```
 
-Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/start-demo.sh`. Then use **Submit job → Submit demo batch**, and watch Jobs, Workers and Scheduler. The [demo guide](docs/guides/running-the-demo.md) walks through crash recovery, workflows and benchmarks.
+Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/start-demo.sh`: the coordinator plus four workers with 2 slots each and demo pacing. On the **Live** page click **Run demo jobs** and watch the workers; use **Pause**, **Interrupt**, **Freeze**, **Crash** and **+ Add worker**. The [demo guide](docs/guides/running-the-demo.md) walks through crash recovery, workflows and benchmarks.
 
 ## Tests
 
@@ -71,7 +73,7 @@ Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/s
 ./mvnw verify
 ```
 
-85 tests, all passing: unit tests for policies, aging, fairness, DAG, schemas, retry and metrics; plugin tests; worker runtime tests (concurrency, timeouts, revocation, plugin loading); coordinator integration tests over the real HTTP API (validation, quotas, capability matching, concurrent claims, lease expiry, fencing, retry limits, timeouts, workflows, artifacts, security); one test against a real PostgreSQL server (embedded binaries). Container isolation tests run only when Docker is available; without Docker the class is aborted by a JUnit assumption and contributes 0 tests (they are not counted as passed). See [testing strategy](docs/testing/testing-strategy.md).
+99 tests, all passing: unit tests for policies, aging, fairness, DAG, schemas, retry and metrics; plugin tests; worker runtime tests (concurrency, timeouts, revocation, plugin loading); coordinator integration tests over the real HTTP API (validation, quotas, capability matching, concurrent claims, lease expiry, fencing, retry limits, timeouts, workflows, artifacts, security); end-to-end tests with four real worker runtimes over HTTP (concurrency, interrupt and retry, pause and resume, freeze and recovery); one test against a real PostgreSQL server (embedded binaries). Container isolation tests run only when Docker is available; without Docker the class is aborted by a JUnit assumption and contributes 0 tests (they are not counted as passed). See [testing strategy](docs/testing/testing-strategy.md).
 
 ## Documentation
 
@@ -91,5 +93,6 @@ Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/s
 - Workers are separate **processes on one machine**; nothing here is tested across machines.
 - Delivery is **at-least-once** with bounded retries; a job can execute more than once. No exactly-once claim.
 - One coordinator; no high availability.
-- Clients are not authenticated (`X-Client-Id` only drives quotas).
+- Clients are not authenticated (`X-Client-Id` only drives quotas), and by default neither are administrator actions: fine on 127.0.0.1, not on a shared network.
+- Demo pacing makes jobs deliberately slower; paced results show `demoPacingMsPerPercent` in their output.
 - Container isolation is implemented but **not verified here** because Docker is not installed on the development machine.

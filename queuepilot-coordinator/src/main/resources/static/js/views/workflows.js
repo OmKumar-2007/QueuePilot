@@ -63,16 +63,16 @@ function dagView(workflow) {
 
 function creator() {
     const text = h('textarea', { rows: 16 }, JSON.stringify(TEMPLATE, null, 2));
-    const errors = h('ul', { class: 'error-list' });
-    return card('Submit a workflow', null,
-        h('p', { class: 'muted small' }, 'Steps reference each other by key. Cycles are rejected; independent steps run in parallel; if a step fails, everything after it is skipped.'),
+    const errors = h('ul', { class: 'errors' });
+    return h('details', { class: 'section' }, h('summary', {}, 'Submit a workflow'), h('div', { class: 'card stack' },
+        h('p', { class: 'muted small', style: { margin: 0 } }, 'Steps reference each other by key. Independent steps run in parallel; if a step fails, everything after it is skipped; cycles are rejected.'),
         text, errors,
-        h('div', { class: 'row', style: { marginTop: '10px' } }, h('span', { class: 'spacer' }),
+        h('div', { class: 'row' }, h('span', { class: 'spacer' }),
             h('button', {
                 class: 'button', onclick: async () => {
                     errors.replaceChildren();
                     try {
-                        const workflow = await api.post('/api/workflows', JSON.parse(text.value), { clientId: 'dashboard' });
+                        const workflow = await api.post('/api/workflows', JSON.parse(text.value), 'dashboard');
                         selectedId = workflow.id;
                         toast(`Workflow ${workflow.name} submitted`);
                         draw();
@@ -81,7 +81,7 @@ function creator() {
                         errors.replaceChildren(...(list.length ? list : [error instanceof ApiError ? error.details() : String(error)]).map(m => h('li', {}, m)));
                     }
                 },
-            }, 'Submit workflow')));
+            }, 'Submit workflow'))));
 }
 
 async function draw() {
@@ -89,17 +89,18 @@ async function draw() {
     if (!selectedId && workflows.length) selectedId = workflows[0].id;
     const selected = workflows.find(w => w.id === selectedId);
     graphArea.replaceChildren(
+        h('div', { class: 'page-head' }, h('h1', {}, 'Workflows')),
         selected ? card(selected.name, h('div', { class: 'row' }, badge(selected.state), h('span', { class: 'muted small' }, `${selected.percentComplete}% done`)),
             progress(selected.percentComplete, selected.state === 'SUCCEEDED'),
             h('div', { style: { marginTop: '14px' } }, dagView(selected)),
             h('p', { class: 'muted small' }, 'Click a step to see its job.')) : null,
-        card('Workflows', null, workflows.length ? table([
+        h('div', { class: 'section' }, card('All workflows', null, workflows.length ? table([
             { label: 'Name', render: w => w.name },
             { label: 'State', render: w => badge(w.state) },
             { label: 'Steps', num: true, render: w => w.nodes.length },
             { label: 'Progress', render: w => progress(w.percentComplete, w.state === 'SUCCEEDED') },
             { label: 'Created', render: w => fmtDateTime(w.createdAt) },
-        ], workflows, w => { selectedId = w.id; draw(); }) : empty('No workflows yet', 'Submit one below.')));
+        ], workflows, w => { selectedId = w.id; draw(); }) : empty('No workflows yet', 'Submit one below.'))));
 }
 
 export default {

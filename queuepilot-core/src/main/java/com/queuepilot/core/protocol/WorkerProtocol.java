@@ -20,12 +20,18 @@ public final class WorkerProtocol {
     public static final String COMMAND_KILL = "KILL";
     public static final String COMMAND_FREEZE = "FREEZE";
     public static final String COMMAND_REREGISTER = "REREGISTER";
+    /** Stop claiming and hold running tasks at their next progress checkpoint (heartbeats continue). */
+    public static final String COMMAND_PAUSE = "PAUSE";
+    public static final String COMMAND_RESUME = "RESUME";
+    /** Stop all running attempts now; they are reported as failed (retryable) and requeued. */
+    public static final String COMMAND_INTERRUPT = "INTERRUPT";
 
     public record RegisterRequest(String name,
                                   int concurrencyLimit,
                                   List<String> capabilities,
                                   List<String> supportedTasks,
-                                  String enrollSecret) {
+                                  String enrollSecret,
+                                  long demoPaceMs) {
     }
 
     public record RegisterResponse(String workerId,
@@ -65,7 +71,10 @@ public final class WorkerProtocol {
     public record HeartbeatRequest(List<AttemptRef> activeAttempts) {
     }
 
-    /** {@code revoked} attempts must be stopped by the worker; {@code command} may be null. */
+    /**
+     * {@code revoked} attempts must be stopped by the worker. {@code command} may be null or hold
+     * several commands separated by commas, in the order they were issued.
+     */
     public record HeartbeatResponse(List<String> renewed, List<String> revoked, String command) {
     }
 

@@ -6,7 +6,7 @@
 4. Start the coordinator: `java -jar queuepilot-coordinator/target/queuepilot-coordinator-1.0.0.jar`
    - Listens on `127.0.0.1:8080` only.
    - Creates `data/` (database, artifacts, generated secrets).
-5. Start one or more workers: `java -jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar --name worker-1 --slots 2`
+5. Start one or more workers: `java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-1 --slots 2`
    - Run from the same folder so the worker finds `data/worker-secret.txt`, or set `QP_WORKER_SECRET`.
    - `--help` lists all options (capabilities, plugins folder, containers).
 6. Open http://localhost:8080.

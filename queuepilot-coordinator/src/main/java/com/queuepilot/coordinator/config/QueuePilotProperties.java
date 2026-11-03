@@ -22,7 +22,10 @@ public record QueuePilotProperties(
         @DefaultValue("52428800") long maxArtifactBytes,
         @DefaultValue("65536") int maxInputBytes,
         @DefaultValue("262144") int maxOutputBytes,
+        @DefaultValue("false") boolean adminAuthEnabled,
         @DefaultValue("admin") String adminUser,
         String adminPassword,
-        String workerSecret) {
+        String workerSecret,
+        @DefaultValue("queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar") Path workerJar,
+        @DefaultValue("150") long launchedWorkerPaceMs) {
 }

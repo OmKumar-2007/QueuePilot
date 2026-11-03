@@ -59,6 +59,13 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Real worker runtime for end-to-end tests against a running coordinator. -->
+        <dependency>
+            <groupId>com.queuepilot</groupId>
+            <artifactId>queuepilot-worker</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Real PostgreSQL binaries for one integration test, without installing PostgreSQL. -->
         <dependency>
             <groupId>io.zonky.test</groupId>

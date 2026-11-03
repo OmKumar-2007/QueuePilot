@@ -32,6 +32,8 @@ class FakeCoordinator implements CoordinatorApi {
     final Set<String> revoked = ConcurrentHashMap.newKeySet();
     final AtomicInteger maxConcurrentClaims = new AtomicInteger();
     final List<Integer> freeSlotsSeen = Collections.synchronizedList(new ArrayList<>());
+    final Queue<String> commands = new ConcurrentLinkedQueue<>();
+    final AtomicInteger heartbeats = new AtomicInteger();
     volatile RegisterRequest registration;
     volatile boolean deregistered;
     private final AtomicInteger outstanding = new AtomicInteger();
@@ -65,7 +67,8 @@ class FakeCoordinator implements CoordinatorApi {
         for (AttemptRef ref : activeAttempts) {
             (revoked.contains(ref.attemptId()) ? revokedNow : renewed).add(ref.attemptId());
         }
-        return new HeartbeatResponse(renewed, revokedNow, null);
+        heartbeats.incrementAndGet();
+        return new HeartbeatResponse(renewed, revokedNow, commands.poll());
     }
 
     @Override

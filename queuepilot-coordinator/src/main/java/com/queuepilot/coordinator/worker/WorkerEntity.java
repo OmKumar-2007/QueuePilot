@@ -31,6 +31,7 @@ public class WorkerEntity {
     private String supportedTasks;
     private String tokenHash;
     private String pendingCommand;
+    private long demoPaceMs;
     private Instant registeredAt;
     private Instant lastHeartbeatAt;
 
@@ -38,7 +39,7 @@ public class WorkerEntity {
     }
 
     public WorkerEntity(String id, String name, int concurrencyLimit, Set<String> capabilities,
-                        Set<String> supportedTasks, String tokenHash, Instant now) {
+                        Set<String> supportedTasks, String tokenHash, long demoPaceMs, Instant now) {
         this.id = id;
         this.name = name;
         this.status = WorkerStatus.ONLINE;
@@ -46,6 +47,7 @@ public class WorkerEntity {
         this.capabilities = String.join(",", capabilities);
         this.supportedTasks = String.join(",", supportedTasks);
         this.tokenHash = tokenHash;
+        this.demoPaceMs = demoPaceMs;
         this.registeredAt = now;
         this.lastHeartbeatAt = now;
     }
@@ -73,11 +75,12 @@ public class WorkerEntity {
         status = newStatus;
     }
 
+    /** Adds a command for the next heartbeat; several commands are delivered in order, comma-separated. */
     public void queueCommand(String command) {
-        pendingCommand = command;
+        pendingCommand = pendingCommand == null ? command : pendingCommand + "," + command;
     }
 
-    /** Returns and clears the command waiting for the next heartbeat. */
+    /** Returns and clears the commands waiting for the next heartbeat. */
     public String takeCommand() {
         String command = pendingCommand;
         pendingCommand = null;
@@ -101,6 +104,7 @@ public class WorkerEntity {
     public WorkerStatus getStatus() { return status; }
     public int getConcurrencyLimit() { return concurrencyLimit; }
     public String getPendingCommand() { return pendingCommand; }
+    public long getDemoPaceMs() { return demoPaceMs; }
     public Instant getRegisteredAt() { return registeredAt; }
     public Instant getLastHeartbeatAt() { return lastHeartbeatAt; }
 }

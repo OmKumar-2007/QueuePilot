@@ -5,6 +5,7 @@ spring:
 queuepilot:
   data-dir: target/test-data
   recovery-enabled: false
+  admin-auth-enabled: true
   admin-password: test-admin
   worker-secret: test-secret
   retry-base-delay-ms: 1000

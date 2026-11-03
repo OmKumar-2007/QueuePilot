@@ -17,7 +17,7 @@ public interface WorkerRepository extends JpaRepository<WorkerEntity, String> {
     List<WorkerEntity> findByStatusIn(Collection<WorkerStatus> statuses);
 
     @Query("select w.id from WorkerEntity w where w.status in (com.queuepilot.core.job.WorkerStatus.ONLINE, "
-            + "com.queuepilot.core.job.WorkerStatus.DRAINING) and w.lastHeartbeatAt < :cutoff")
+            + "com.queuepilot.core.job.WorkerStatus.DRAINING, com.queuepilot.core.job.WorkerStatus.PAUSED) and w.lastHeartbeatAt < :cutoff")
     List<String> findSilentWorkerIds(@Param("cutoff") Instant cutoff);
 
     List<WorkerEntity> findAllByOrderByRegisteredAtDesc();

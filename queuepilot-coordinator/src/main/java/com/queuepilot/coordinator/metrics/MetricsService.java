@@ -74,7 +74,7 @@ public class MetricsService {
         }
 
         List<WorkerEntity> allWorkers = workers.findAll();
-        List<WorkerEntity> online = workers.findByStatusIn(EnumSet.of(WorkerStatus.ONLINE, WorkerStatus.DRAINING));
+        List<WorkerEntity> online = workers.findByStatusIn(EnumSet.of(WorkerStatus.ONLINE, WorkerStatus.DRAINING, WorkerStatus.PAUSED));
         int slots = online.stream().mapToInt(WorkerEntity::getConcurrencyLimit).sum();
         long running = attempts.countByState(AttemptState.RUNNING);
 

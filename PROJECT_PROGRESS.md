@@ -18,9 +18,18 @@
 | 11 | Benchmarks | ✅ Done | Separate module: simulated policy comparison, measured worker scaling, reports + publishing |
 | 12 | Integration and verification | ✅ Done | Full test suite, live end-to-end run with real crash, documentation |
 
+## Iteration 2 (2026-11-03): demo usability
+
+- Demo pacing (`--pace-ms`) so jobs take ~15-30 s; marked in job output.
+- Worker controls: pause/resume, interrupt, freeze with automatic thaw, crash, add worker from the dashboard.
+- Admin password removed by default (`QP_ADMIN_AUTH=true` re-enables it).
+- Demo script starts four workers.
+- Dashboard redesigned around a single Live page; controls are no longer re-created on each refresh (clicks were being lost).
+- Ideas taken from the original prototype's tests (github.com/SubhamJM/QueuePilot): readable `@DisplayName`s, a 4-worker concurrent run, crash/recovery on a different worker. They are now real end-to-end tests over HTTP (`RealWorkersEndToEndTest`) instead of in-memory threads.
+
 ## Verification status (2026-11-03)
 
-- `./mvnw verify`: 85 tests, 0 failures; container isolation tests do not run (Docker absent). See `docs/testing/testing-strategy.md` for the requirement-to-test map.
+- `./mvnw verify`: 99 tests, 0 failures; container isolation tests do not run (Docker absent). See `docs/testing/testing-strategy.md` for the requirement-to-test map.
 - Live run: coordinator + 2 worker processes; plugin routing, real crash (exit 137) and recovery on the other worker, file artifacts, workflow ordering, cyclic workflow rejection all confirmed.
 - Benchmarks: simulated (3 scenarios × 3 policies × 5 seeds) and measured (1/2/4 workers, 2 workloads) reports produced and displayed.
 - Dashboard: all pages checked in a browser; no console errors.

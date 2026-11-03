@@ -14,7 +14,8 @@ import java.nio.file.Path;
 /**
  * Supplies the admin password and worker enrollment secret.
  *
- * <p>Taken from configuration (environment variables {@code QP_ADMIN_PASSWORD} /
+ * <p>The admin password is only used when {@code queuepilot.admin-auth-enabled=true}.
+ * Taken from configuration (environment variables {@code QP_ADMIN_PASSWORD} /
  * {@code QP_WORKER_SECRET}) when set. Otherwise a random value is generated once and stored in
  * the git-ignored data directory, so a local setup works without committing any secret and
  * without printing it to the log.</p>
@@ -30,7 +31,11 @@ public class SecretsProvider {
 
     public SecretsProvider(QueuePilotProperties properties) {
         this.adminUser = properties.adminUser();
-        this.adminPassword = resolve(properties.adminPassword(), properties.dataDir().resolve("admin-password.txt"), "Admin password");
+        // Without admin authentication no password is needed; a random in-memory value keeps Spring
+        // Security from creating its own default user.
+        this.adminPassword = properties.adminAuthEnabled()
+                ? resolve(properties.adminPassword(), properties.dataDir().resolve("admin-password.txt"), "Admin password")
+                : TokenHasher.newToken();
         this.workerSecret = resolve(properties.workerSecret(), properties.dataDir().resolve("worker-secret.txt"), "Worker enrollment secret");
     }
 

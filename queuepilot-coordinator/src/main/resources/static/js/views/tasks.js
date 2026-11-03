@@ -1,12 +1,12 @@
-import { admin, api } from '../api.js';
-import { adminAction } from '../app.js';
-import { badge, card, fmtDuration, h, json, openDrawer, table } from '../ui.js';
+import { api } from '../api.js';
+import { act } from '../app.js';
+import { badge, card, fmtDuration, h, openDrawer, table } from '../ui.js';
 
 let root;
 
 const EXAMPLE = {
     taskType: 'prime-sieve', version: '1.0.0', displayName: 'Prime sieve (example plugin)',
-    description: 'Counts primes up to limit. Install queuepilot-example-plugin jar into a worker plugins folder first.',
+    description: 'Counts primes up to a limit. Needs the example plugin jar in a worker plugins folder.',
     executorKind: 'JAVA_PLUGIN', requiredCapabilities: ['cpu'],
     inputSchema: { fields: [{ name: 'limit', type: 'INTEGER', required: true, min: 10, max: 500000000 }] },
     outputSchema: { fields: [{ name: 'primeCount', type: 'INTEGER' }] },
@@ -15,65 +15,56 @@ const EXAMPLE = {
 
 function detail(task) {
     const toggle = h('button', {
-        class: `button small${task.enabled ? ' danger' : ''}`,
-        onclick: () => adminAction(() => api.adminPost(`/api/admin/tasks/${task.id}/${task.enabled ? 'disable' : 'enable'}`),
-            `Task ${task.identifier} ${task.enabled ? 'disabled' : 'enabled'}`)
+        class: 'button secondary',
+        onclick: () => act(() => api.post(`/api/admin/tasks/${task.id}/${task.enabled ? 'disable' : 'enable'}`),
+            `${task.displayName} ${task.enabled ? 'disabled' : 'enabled'}`)
             .then(async () => { await draw(); openDrawer(detail(await api.get(`/api/tasks/${task.id}`))); }),
     }, task.enabled ? 'Disable' : 'Enable');
     return h('div', { class: 'stack' },
-        h('div', { class: 'row' }, h('h2', { style: { margin: 0 } }, task.displayName), badge(task.enabled ? 'ONLINE' : 'DISABLED'),
+        h('h1', {}, task.displayName),
+        h('div', { class: 'row' }, badge(task.enabled ? 'ONLINE' : 'DISABLED'), h('span', { class: 'muted mono' }, task.identifier),
             h('span', { class: 'spacer' }), toggle),
-        h('p', { class: 'muted' }, task.description || ''),
-        card('Definition', null, h('table', {}, h('tbody', {}, [
-            ['Identifier', h('span', { class: 'mono' }, task.identifier)],
-            ['Executor', task.executorKind],
-            ['Required capabilities', task.requiredCapabilities.join(', ') || 'none'],
-            ['Resources', `${task.cpuMillis / 1000} CPU · ${task.memoryMb} MB`],
-            ['Timeout', `${task.timeoutSeconds} s`],
-            ['Max retries', task.maxRetries],
-            ['Default priority', task.defaultPriority],
-            ['Default estimate', fmtDuration(task.defaultEstimatedMs)],
-            ['Container image', task.containerImage || '—'],
-        ].map(([k, v]) => h('tr', {}, h('th', {}, k), h('td', {}, v)))))),
-        card('Input schema', null, table([
+        task.description ? h('p', { class: 'muted' }, task.description) : null,
+        card(null, null, h('dl', { class: 'facts' },
+            h('dt', {}, 'Needs'), h('dd', {}, task.requiredCapabilities.join(', ') || 'nothing special'),
+            h('dt', {}, 'Timeout'), h('dd', {}, `${task.timeoutSeconds} s`),
+            h('dt', {}, 'Retries'), h('dd', {}, task.maxRetries),
+            h('dt', {}, 'Typical duration'), h('dd', {}, fmtDuration(task.defaultEstimatedMs)),
+            h('dt', {}, 'Runs as'), h('dd', {}, task.executorKind === 'CONTAINER' ? `container ${task.containerImage}` : 'Java plugin'))),
+        card('Inputs', null, table([
             { label: 'Field', render: f => h('span', { class: 'mono' }, f.name) },
-            { label: 'Type', render: f => f.type },
-            { label: 'Required', render: f => (f.required ? 'yes' : 'no') },
-            { label: 'Rules', render: f => [f.min != null && `min ${f.min}`, f.max != null && `max ${f.max}`, f.maxLength && `≤ ${f.maxLength} chars`,
-                f.maxItems && `≤ ${f.maxItems} items`, f.values && f.values.join(' | ')].filter(Boolean).join(', ') },
-        ], task.inputSchema.fields)),
-        card('Output schema', null, json(task.outputSchema)));
+            { label: 'Type', render: f => f.type.toLowerCase() },
+            { label: 'Rules', render: f => [f.required && 'required', f.min != null && `≥ ${f.min}`, f.max != null && `≤ ${f.max}`,
+                f.values && f.values.join(' | ')].filter(Boolean).join(', ') },
+        ], task.inputSchema.fields)));
 }
 
 function registerForm() {
     const text = h('textarea', { rows: 14 }, JSON.stringify(EXAMPLE, null, 2));
-    return card('Register a task type', badge('ADMIN'),
-        h('p', { class: 'muted small' }, 'Registers the manifest (metadata) only. The code ships separately as a plugin jar in a worker\'s plugins folder, or as a container image. New versions start disabled.'),
-        text,
-        h('div', { class: 'row', style: { marginTop: '10px' } }, h('span', { class: 'spacer' }),
-            h('button', {
-                class: 'button', disabled: !admin.isLoggedIn(),
-                title: admin.isLoggedIn() ? '' : 'Log in as administrator first',
-                onclick: () => adminAction(() => api.adminPost('/api/admin/tasks', JSON.parse(text.value)), 'Task registered (disabled)').then(draw),
-            }, 'Register')));
+    return h('details', { class: 'section' }, h('summary', {}, 'Register a new task type'),
+        h('div', { class: 'card stack' },
+            h('p', { class: 'muted small', style: { margin: 0 } }, 'This registers the description only. The code ships as a plugin jar in a worker’s plugins folder. New versions start disabled.'),
+            text,
+            h('div', { class: 'row' }, h('span', { class: 'spacer' }), h('button', {
+                class: 'button', onclick: () => act(() => api.post('/api/admin/tasks', JSON.parse(text.value)), 'Task registered').then(draw),
+            }, 'Register'))));
 }
 
 async function draw() {
     const tasks = await api.get('/api/tasks');
     root.replaceChildren(
-        card(`Registered task types (${tasks.length})`, null, table([
-            { label: 'Task', render: t => h('div', {}, h('div', {}, t.displayName), h('div', { class: 'muted small mono' }, t.identifier)) },
-            { label: 'Executor', render: t => t.executorKind },
-            { label: 'Capabilities', render: t => h('div', { class: 'chips' }, t.requiredCapabilities.map(c => h('span', { class: 'chip' }, c))) },
-            { label: 'Timeout', num: true, render: t => `${t.timeoutSeconds}s` },
-            { label: 'Retries', num: true, render: t => t.maxRetries },
+        h('div', { class: 'page-head' }, h('h1', {}, 'Tasks')),
+        h('section', { class: 'card table-card' }, table([
+            { label: 'Task', render: t => t.displayName },
+            { label: 'Version', render: t => h('span', { class: 'mono' }, t.version) },
+            { label: 'Needs', render: t => t.requiredCapabilities.join(', ') },
             { label: 'Status', render: t => badge(t.enabled ? 'ONLINE' : 'DISABLED') },
         ], tasks, task => openDrawer(detail(task)))),
         registerForm());
 }
 
 export default {
-    title: 'Task registry',
+    title: 'Tasks',
     async render(element) {
         root = element;
         await draw();

@@ -6,6 +6,8 @@ public enum WorkerStatus {
     ONLINE,
     /** Healthy, finishing current attempts, accepting nothing new. */
     DRAINING,
+    /** Healthy and heartbeating, but told by an administrator to hold all work. */
+    PAUSED,
     /** Heartbeats stopped or the worker deregistered; must re-register. */
     OFFLINE,
     /** Switched off by an administrator. */

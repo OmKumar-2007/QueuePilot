@@ -54,6 +54,9 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <mainClass>com.queuepilot.worker.WorkerMain</mainClass>
+                    <!-- Executable jar is queuepilot-worker-1.0.0-exec.jar; the plain jar stays usable as a
+                         dependency (the coordinator's end-to-end tests run real workers in-process). -->
+                    <classifier>exec</classifier>
                 </configuration>
             </plugin>
         </plugins>

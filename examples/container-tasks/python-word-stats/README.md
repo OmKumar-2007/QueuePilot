@@ -22,7 +22,7 @@ curl -u admin:$QP_ADMIN_PASSWORD -H "Content-Type: application/json" --data @exa
 ## Run a worker that accepts container tasks
 
 ```bash
-java -jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar --name container-worker --containers
+java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name container-worker --containers
 ```
 
 The worker advertises the `docker` capability only if `docker version` succeeds.

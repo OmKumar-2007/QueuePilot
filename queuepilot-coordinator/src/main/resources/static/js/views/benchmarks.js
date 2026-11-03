@@ -71,14 +71,14 @@ async function draw() {
             h('pre', { class: 'json' },
                 'java -jar queuepilot-benchmarks/target/queuepilot-benchmarks-1.0.0.jar simulate --publish\n'
                 + 'java -jar queuepilot-benchmarks/target/queuepilot-benchmarks-1.0.0.jar execute \\\n'
-                + '     --worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar --worker-counts 1,2,4 --publish')));
+                + '     --worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --worker-counts 1,2,4 --publish')));
         return;
     }
     selected = reports.find(r => r.id === selected?.id) || reports[0];
     const picker = h('select', { style: { width: 'auto' }, onchange: e => { selected = reports.find(r => r.id === e.target.value); draw(); } },
         reports.map(r => h('option', { value: r.id, selected: r.id === selected.id }, `${r.kind} · ${r.name} · ${fmtDateTime(r.createdAt)}`)));
     root.replaceChildren(
-        h('div', { class: 'row', style: { marginBottom: '14px' } }, h('span', { class: 'muted' }, 'Report'), picker),
+        h('div', { class: 'page-head' }, h('h1', {}, 'Benchmarks'), h('span', { class: 'spacer' }), picker),
         ...reportView(selected));
 }
 

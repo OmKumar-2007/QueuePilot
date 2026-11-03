@@ -72,6 +72,9 @@ public class WorkerRegistryService {
         if (request.concurrencyLimit() < 1 || request.concurrencyLimit() > 64) {
             errors.add(new ValidationError("concurrencyLimit", "must be 1..64"));
         }
+        if (request.demoPaceMs() < 0 || request.demoPaceMs() > 10_000) {
+            errors.add(new ValidationError("demoPaceMs", "must be 0..10000"));
+        }
         Set<String> capabilities = checkedSet(request.capabilities(), CAPABILITY, "capabilities", errors);
         Set<String> tasks = checkedSet(request.supportedTasks(), TASK_ID, "supportedTasks", errors);
         if (!errors.isEmpty()) {
@@ -80,11 +83,12 @@ public class WorkerRegistryService {
 
         String token = TokenHasher.newToken();
         WorkerEntity worker = new WorkerEntity("w-" + UUID.randomUUID().toString().substring(0, 8), request.name(),
-                request.concurrencyLimit(), capabilities, tasks, TokenHasher.hash(token), clock.instant());
+                request.concurrencyLimit(), capabilities, tasks, TokenHasher.hash(token), request.demoPaceMs(), clock.instant());
         workers.save(worker);
         events.record(EventType.WORKER_REGISTERED, null, worker.getId(), null, "Worker " + worker.getName() + " ("
                 + worker.getId() + ") registered with " + request.concurrencyLimit() + " slots, capabilities "
-                + capabilities + ", tasks " + tasks);
+                + capabilities + ", tasks " + tasks
+                + (request.demoPaceMs() > 0 ? ", demo pacing " + request.demoPaceMs() + " ms per percent" : ""));
         return new RegisterResponse(worker.getId(), token, properties.heartbeatIntervalMs(),
                 properties.leaseDurationMs(), properties.claimPollMs());
     }
@@ -113,7 +117,8 @@ public class WorkerRegistryService {
     public void markOfflineIfSilent(String workerId) {
         WorkerEntity worker = get(workerId);
         Instant cutoff = clock.instant().minusMillis(properties.workerTimeoutMs());
-        boolean watched = worker.getStatus() == WorkerStatus.ONLINE || worker.getStatus() == WorkerStatus.DRAINING;
+        boolean watched = worker.getStatus() == WorkerStatus.ONLINE || worker.getStatus() == WorkerStatus.DRAINING
+                || worker.getStatus() == WorkerStatus.PAUSED;
         if (!watched || !worker.isSilentSince(cutoff)) {
             return;
         }
@@ -123,18 +128,31 @@ public class WorkerRegistryService {
         attemptService.abandonAttemptsOf(workerId, "Worker " + worker.getName() + " stopped sending heartbeats");
     }
 
-    /** Admin actions: drain, resume, disable, enable. */
+    /** Admin actions: drain, pause, resume, interrupt, disable, enable. */
     @Transactional
     public WorkerEntity changeStatus(String workerId, String action) {
         WorkerEntity worker = get(workerId);
         WorkerStatus current = worker.getStatus();
+        if (action.equals("interrupt")) {
+            requireFrom(current, current, WorkerStatus.ONLINE, WorkerStatus.DRAINING, WorkerStatus.PAUSED, WorkerStatus.DISABLED);
+            worker.queueCommand(WorkerProtocol.COMMAND_INTERRUPT);
+            events.record(EventType.WORKER_STATUS_CHANGED, null, workerId, null,
+                    "Administrator interrupted the running jobs of worker " + worker.getName() + "; they will be retried");
+            return worker;
+        }
         WorkerStatus target = switch (action) {
             case "drain" -> requireFrom(current, WorkerStatus.DRAINING, WorkerStatus.ONLINE);
-            case "resume" -> requireFrom(current, WorkerStatus.ONLINE, WorkerStatus.DRAINING);
-            case "disable" -> requireFrom(current, WorkerStatus.DISABLED, WorkerStatus.ONLINE, WorkerStatus.DRAINING);
+            case "pause" -> requireFrom(current, WorkerStatus.PAUSED, WorkerStatus.ONLINE, WorkerStatus.DRAINING);
+            case "resume" -> requireFrom(current, WorkerStatus.ONLINE, WorkerStatus.DRAINING, WorkerStatus.PAUSED);
+            case "disable" -> requireFrom(current, WorkerStatus.DISABLED, WorkerStatus.ONLINE, WorkerStatus.DRAINING, WorkerStatus.PAUSED);
             case "enable" -> requireFrom(current, WorkerStatus.ONLINE, WorkerStatus.DISABLED);
             default -> throw new NotFoundException("Unknown action " + action);
         };
+        if (target == WorkerStatus.PAUSED) {
+            worker.queueCommand(WorkerProtocol.COMMAND_PAUSE);
+        } else if (current == WorkerStatus.PAUSED) {
+            worker.queueCommand(WorkerProtocol.COMMAND_RESUME);
+        }
         worker.changeStatus(target);
         events.record(EventType.WORKER_STATUS_CHANGED, null, workerId, null,
                 "Administrator changed worker " + worker.getName() + " from " + current + " to " + target);

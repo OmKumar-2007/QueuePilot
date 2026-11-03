@@ -28,7 +28,7 @@ public final class BenchmarkMain {
               java -jar queuepilot-benchmarks.jar simulate [--jobs 200] [--workers 4] [--seed 42] [--seeds 5]
                    [--scenarios MIXED,LONG_FIRST,PRIORITY_SKEW] [--out benchmark-results] [--publish ...]
               java -jar queuepilot-benchmarks.jar execute [--coordinator http://localhost:8080]
-                   [--worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0.jar] [--worker-counts 1,2,4]
+                   [--worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar] [--worker-counts 1,2,4]
                    [--slots 1] [--workloads "monte-carlo-pi:samples=20000000;sorting:count=2000000"]
                    [--jobs 8] [--warmup 1] [--reps 3] [--out benchmark-results] [--publish]
             Publishing (--publish) imports the report into the coordinator dashboard and needs

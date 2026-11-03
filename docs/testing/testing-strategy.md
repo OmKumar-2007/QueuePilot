@@ -1,6 +1,6 @@
 # Testing Strategy
 
-Run everything with `./mvnw verify` from the repository root. Result on 2026-11-03: 85 tests, 0 failures (task-api 4, core 25, built-ins 7, example plugin 1, coordinator 35, worker 9, benchmarks 4).
+Run everything with `./mvnw verify` from the repository root. Result on 2026-11-03: 99 tests, 0 failures (task-api 4, core 25, built-ins 7, example plugin 1, worker 13, coordinator 45, benchmarks 4).
 
 ## Layers
 
@@ -10,6 +10,7 @@ Run everything with `./mvnw verify` from the repository root. Result on 2026-11-
 | Plugin | `queuepilot-tasks-builtin`, `queuepilot-example-plugin` | < 1 s | Tasks compute correct results, report monotonic progress ending at 100, honour cancellation, discoverable via ServiceLoader with manifests |
 | Worker runtime | `queuepilot-worker` (fake coordinator) | seconds | Slot limit respected under real concurrency, failure flags, local timeout, revoked attempts abandoned silently, plugin jar loading, sandbox command flags |
 | Coordinator integration | `queuepilot-coordinator` (full Spring context, H2 PG-mode, controllable clock) | ~30 s | Every rule through the real HTTP API |
+| Real workers end-to-end | `RealWorkersEndToEndTest` (coordinator on a random port + 4 real `WorkerRuntime`s over HTTP, real clock and recovery) | ~20 s | 4 jobs run concurrently on 4 workers; interrupt then retry; pause holds progress past the lease time then resume; freeze then recovery on another worker then thaw and re-register |
 | Real PostgreSQL | `PostgresIntegrationTest` (embedded PostgreSQL binaries) | ~30 s | Flyway migration and a full job lifecycle on PostgreSQL |
 | Container isolation | `ContainerIsolationTest` | needs Docker | No network, read-only root, non-root user, PID limit. **Does not run without Docker (0 tests reported, not counted as passed)** |
 | End-to-end (manual/scripted) | live coordinator + 2 worker processes | minutes | Plugin routing, real crash recovery, files, workflows, benchmarks |

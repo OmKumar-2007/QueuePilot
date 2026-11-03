@@ -21,7 +21,9 @@ public record WorkerConfig(String coordinatorUrl,
                            Path pluginsDir,
                            Path workDir,
                            boolean containersEnabled,
-                           String dockerCommand) {
+                           String dockerCommand,
+                           long paceMsPerPercent,
+                           long freezeMs) {
 
     public static final String USAGE = """
             Usage: java -jar queuepilot-worker.jar [options]
@@ -35,6 +37,9 @@ public record WorkerConfig(String coordinatorUrl,
               --work-dir DIR         scratch space (default ./data/worker-work/<name>)
               --containers           also run CONTAINER tasks with Docker (Phase 9)
               --docker CMD           docker executable (default docker)
+              --pace-ms N            demo pacing: wait N ms per percent of progress so jobs can be
+                                     watched (default 0 = full speed; never use for benchmarks)
+              --freeze-ms N          how long a FREEZE simulation stops heartbeats (default 20000)
             """;
 
     public static WorkerConfig fromArgs(String[] args) throws IOException {
@@ -59,7 +64,9 @@ public record WorkerConfig(String coordinatorUrl,
                 Path.of(options.getOrDefault("plugins", "./plugins")),
                 Path.of(options.getOrDefault("work-dir", "./data/worker-work/" + name)),
                 options.containsKey("containers"),
-                options.getOrDefault("docker", "docker"));
+                options.getOrDefault("docker", "docker"),
+                Long.parseLong(options.getOrDefault("pace-ms", "0")),
+                Long.parseLong(options.getOrDefault("freeze-ms", "20000")));
     }
 
     static Map<String, String> parse(String[] args) {

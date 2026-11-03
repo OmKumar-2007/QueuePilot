@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Wires a worker together and runs its three activities:
  * <ul>
+ *   <li><b>commands</b> from the coordinator (on heartbeat replies): PAUSE / RESUME, INTERRUPT,
+ *       FREEZE (stop heartbeating for a while), KILL (exit abruptly), REREGISTER,</li>
  *   <li><b>claim loop</b> (one thread): asks for work whenever a slot is free,</li>
  *   <li><b>execution pool</b> ({@code slots} threads): runs {@link AttemptRunner}s,</li>
  *   <li><b>heartbeat</b> (scheduled): renews leases of all active attempts and obeys commands.</li>
@@ -43,7 +45,8 @@ public class WorkerRuntime {
     private final ExecutorService pool;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final AtomicBoolean running = new AtomicBoolean();
-    private final AtomicBoolean frozen = new AtomicBoolean();
+    private final PauseGate pauseGate = new PauseGate();
+    private volatile long frozenUntilMillis;
     private volatile long claimPollMs = 1000;
     private volatile String workerId;
     private Thread claimThread;
@@ -80,21 +83,30 @@ public class WorkerRuntime {
         return active.size();
     }
 
+    public boolean isPaused() {
+        return pauseGate.isPaused();
+    }
+
+    public boolean isFrozen() {
+        return System.currentTimeMillis() < frozenUntilMillis;
+    }
+
     private RegisterResponse registerWithRetry() throws InterruptedException {
         List<String> capabilities = new ArrayList<>(config.capabilities());
         if (containerRunner != null && !capabilities.contains("docker")) {
             capabilities.add("docker");
         }
         RegisterRequest request = new RegisterRequest(config.name(), config.slots(), capabilities,
-                registry.identifiers(), config.enrollSecret());
+                registry.identifiers(), config.enrollSecret(), config.paceMsPerPercent());
         long backoff = 1000;
         while (true) {
             try {
                 RegisterResponse response = api.register(request);
                 workerId = response.workerId();
                 claimPollMs = response.claimPollMs();
-                log.info("Registered as {} ({}) with {} slots; tasks {}; capabilities {}", config.name(), workerId,
-                        config.slots(), registry.identifiers(), capabilities);
+                log.info("Registered as {} ({}) with {} slots; tasks {}; capabilities {}{}", config.name(), workerId,
+                        config.slots(), registry.identifiers(), capabilities,
+                        config.paceMsPerPercent() > 0 ? "; DEMO PACING " + config.paceMsPerPercent() + " ms per percent" : "");
                 return response;
             } catch (CoordinatorApi.CoordinatorException e) {
                 if (e.status() == 400 || e.status() == 403) {
@@ -110,6 +122,7 @@ public class WorkerRuntime {
     private void claimLoop() {
         while (running.get()) {
             try {
+                pauseGate.awaitOpen(() -> !running.get());
                 slots.acquire();
                 Optional<Assignment> assignment = claimSafely();
                 if (assignment.isEmpty()) {
@@ -118,7 +131,7 @@ public class WorkerRuntime {
                     continue;
                 }
                 pool.submit(new AttemptRunner(assignment.get(), registry, containerRunner, api, active, scheduler,
-                        config.workDir(), slots::release));
+                        config.workDir(), config.paceMsPerPercent(), pauseGate, slots::release));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -140,7 +153,7 @@ public class WorkerRuntime {
     }
 
     private void heartbeatSafely() {
-        if (frozen.get()) {
+        if (isFrozen()) {
             return;
         }
         try {
@@ -157,27 +170,42 @@ public class WorkerRuntime {
         }
     }
 
-    private void handleCommand(String command) {
-        if (command == null) {
+    private void handleCommand(String commands) {
+        if (commands == null || commands.isBlank()) {
             return;
         }
-        switch (command) {
-            case WorkerProtocol.COMMAND_KILL -> {
-                log.error("KILL received (failure simulation): exiting immediately without reporting");
-                Runtime.getRuntime().halt(137);
+        for (String command : commands.split(",")) {
+            switch (command.trim()) {
+                case WorkerProtocol.COMMAND_KILL -> {
+                    log.error("KILL received (failure simulation): exiting immediately without reporting");
+                    Runtime.getRuntime().halt(137);
+                }
+                case WorkerProtocol.COMMAND_FREEZE -> {
+                    log.error("FREEZE received (failure simulation): no heartbeats for {} ms, tasks keep running", config.freezeMs());
+                    frozenUntilMillis = System.currentTimeMillis() + config.freezeMs();
+                }
+                case WorkerProtocol.COMMAND_PAUSE -> {
+                    log.warn("PAUSE received: no new work, running tasks hold at their next checkpoint");
+                    pauseGate.pause();
+                }
+                case WorkerProtocol.COMMAND_RESUME -> {
+                    log.info("RESUME received");
+                    pauseGate.resume();
+                }
+                case WorkerProtocol.COMMAND_INTERRUPT -> {
+                    log.warn("INTERRUPT received: stopping {} running attempt(s)", active.size());
+                    active.cancelAll(CancelReason.INTERRUPTED);
+                }
+                case WorkerProtocol.COMMAND_REREGISTER -> reregister();
+                default -> log.warn("Unknown command {}", command);
             }
-            case WorkerProtocol.COMMAND_FREEZE -> {
-                log.error("FREEZE received (failure simulation): heartbeats stop, running tasks continue");
-                frozen.set(true);
-            }
-            case WorkerProtocol.COMMAND_REREGISTER -> reregister();
-            default -> log.warn("Unknown command {}", command);
         }
     }
 
     private void reregister() {
         log.warn("Coordinator no longer recognises this worker; re-registering");
         active.cancelAll(CancelReason.REVOKED);
+        pauseGate.resume();
         try {
             registerWithRetry();
         } catch (InterruptedException e) {
@@ -195,6 +223,7 @@ public class WorkerRuntime {
             claimThread.interrupt();
         }
         active.cancelAll(CancelReason.SHUTDOWN);
+        pauseGate.resume();
         pool.shutdownNow();
         scheduler.shutdownNow();
         try {
