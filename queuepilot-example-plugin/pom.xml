@@ -12,7 +12,7 @@
     <!-- Demonstrates F17: a new task type built against queuepilot-task-api only.
          Nothing in the coordinator, core or worker depends on this module. -->
     <artifactId>queuepilot-example-plugin</artifactId>
-    <name>QueuePilot Example Plugin (prime-sieve)</name>
+    <name>QueuePilot Example Plugin (prime-sieve, n-queens)</name>
 
     <dependencies>
         <dependency>
@@ -23,6 +23,11 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

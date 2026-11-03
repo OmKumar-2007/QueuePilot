@@ -11,7 +11,7 @@ Clients submit jobs for **registered task types**. A **coordinator** validates a
 | Area | What exists |
 |---|---|
 | Task registry | Versioned task definitions (schema, capabilities, limits, timeout, retries); immutable versions; enable/disable |
-| Plugins | `TaskExecutor` contract; built-ins: sorting, text analysis, Monte Carlo pi, file checksum; example third-party plugin (prime sieve) |
+| Plugins | `TaskExecutor` contract; built-ins: sorting, text analysis, Monte Carlo pi, file checksum; example third-party plugin with prime sieve and an N-Queens solver |
 | Jobs | Schema validation, priorities, queues, scheduled start, deadlines with at-risk/overdue status, cancel-before-start, per-client limits |
 | Scheduling | FCFS, Priority with Aging, SJF (switchable live); round-robin fairness across queues; capability + capacity matching |
 | Workers | Separate JVM processes; concurrency slots; real progress; input/output files; local timeouts |
@@ -65,7 +65,7 @@ java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worke
 java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-2 --slots 2 --capabilities cpu,io,text
 ```
 
-Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/start-demo.sh`: the coordinator plus four workers with 2 slots each and demo pacing. On the **Live** page click **Run demo jobs** and watch the workers; use **Pause**, **Interrupt**, **Freeze**, **Crash** and **+ Add worker**. The [demo guide](docs/guides/running-the-demo.md) walks through crash recovery, workflows and benchmarks.
+Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/start-demo.sh`: the coordinator plus four workers with 2 slots each and demo pacing. On the **Live** page click **Run demo jobs** and watch the workers; use **Pause**, **Interrupt**, **Freeze**, **Crash** and **+ Add worker**. The [demo guide](docs/guides/running-the-demo.md) walks through crash recovery, workflows and benchmarks. To load the system with a mix of 50 succeeding and failing jobs, run `python scripts/simulate_jobs.py --chaos`.
 
 ## Tests
 
@@ -84,7 +84,7 @@ Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/s
 | Design notes (scheduling, workers, retries/leases, workflows) | [docs/design](docs/design) |
 | Decisions (ADRs) | [docs/decisions](docs/decisions) |
 | Testing and benchmark methodology | [docs/testing](docs/testing) |
-| How-to guides | [docs/guides](docs/guides) |
+| How-to guides | [docs/guides](docs/guides), including [simulating 50 jobs](docs/guides/simulating-50-jobs.md) |
 | OOP concept mapping | [docs/oop-mapping.md](docs/oop-mapping.md) |
 | Status and known limitations | [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) |
 

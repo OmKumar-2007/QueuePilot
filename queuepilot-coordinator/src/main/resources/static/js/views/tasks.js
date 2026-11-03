@@ -1,8 +1,10 @@
 import { api } from '../api.js';
 import { act } from '../app.js';
-import { badge, card, fmtDuration, h, openDrawer, table } from '../ui.js';
+import { card, fmtDuration, h, openDrawer, table } from '../ui.js';
 
 let root;
+
+const enabledBadge = enabled => h('span', { class: `status ${enabled ? 'ONLINE' : 'DISABLED'}` }, enabled ? 'enabled' : 'disabled');
 
 const EXAMPLE = {
     taskType: 'prime-sieve', version: '1.0.0', displayName: 'Prime sieve (example plugin)',
@@ -22,7 +24,7 @@ function detail(task) {
     }, task.enabled ? 'Disable' : 'Enable');
     return h('div', { class: 'stack' },
         h('h1', {}, task.displayName),
-        h('div', { class: 'row' }, badge(task.enabled ? 'ONLINE' : 'DISABLED'), h('span', { class: 'muted mono' }, task.identifier),
+        h('div', { class: 'row' }, enabledBadge(task.enabled), h('span', { class: 'muted mono' }, task.identifier),
             h('span', { class: 'spacer' }), toggle),
         task.description ? h('p', { class: 'muted' }, task.description) : null,
         card(null, null, h('dl', { class: 'facts' },
@@ -58,7 +60,7 @@ async function draw() {
             { label: 'Task', render: t => t.displayName },
             { label: 'Version', render: t => h('span', { class: 'mono' }, t.version) },
             { label: 'Needs', render: t => t.requiredCapabilities.join(', ') },
-            { label: 'Status', render: t => badge(t.enabled ? 'ONLINE' : 'DISABLED') },
+            { label: 'Status', render: t => enabledBadge(t.enabled) },
         ], tasks, task => openDrawer(detail(task)))),
         registerForm());
 }

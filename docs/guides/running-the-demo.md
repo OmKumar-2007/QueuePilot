@@ -18,4 +18,6 @@ Prerequisite: `./mvnw install -DskipTests`, then `scripts/start-demo.ps1` (Windo
 | 12. Files | Submit *file-checksum* or *text-analysis* with an uploaded file | Output digest / CSV artifact downloadable from the job drawer |
 | 13. Benchmarks | Run the two commands in [benchmark-methodology.md](../testing/benchmark-methodology.md) with `--publish` | **Benchmarks** page shows SIMULATED and MEASURED reports separately |
 
+**Load test:** `python scripts/simulate_jobs.py --chaos` submits 50 jobs (38 succeed, 8 fail, 4 are skipped) and checks every outcome. See [simulating-50-jobs.md](simulating-50-jobs.md).
+
 Stop: close the windows, or `pkill -f queuepilot-` (Git Bash/Linux). Delete `data/` to reset everything.

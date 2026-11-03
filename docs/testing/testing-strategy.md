@@ -47,6 +47,14 @@ Coordinator + `worker-1` (with the prime-sieve plugin jar) + `worker-2`:
 3. An uploaded 820 KB file: checksum equal to a locally computed SHA-256; text analysis produced the expected top words and a CSV output artifact.
 4. A diamond workflow ran a → (b, c) → d in that order; a cyclic workflow was rejected with `x -> y -> x`.
 
+## Live run 3 (2026-11-03): file submission, N-Queens, 50-job simulation
+
+1. **File upload through the Submit page.** `examples/sample-files/queuepilot-notes.txt` (38,060 bytes) was attached in the browser form and submitted twice. *File checksum* returned `4a6b3354…77ff3`, the same as a locally computed SHA-256. *Text analysis* reported 408 lines, "workers" 808 times and "jobs" 800 times (as constructed), and produced a downloadable CSV.
+2. **New task type N-Queens.** Built in the example plugin and installed on worker-1 only. It was registered and enabled on the Tasks page and submitted from the Submit page: `n = 8` gave 92 solutions plus the first board; `n = 3` with `requireSolution` FAILED with `NO_SOLUTION` after one attempt (permanent failures are not retried).
+3. **`scripts/simulate_jobs.py --chaos`.** 50 jobs plus 2 refused requests (HTTP 400). Result: 38 SUCCEEDED, 8 FAILED (`MISSING_DATA` ×6, `NO_SOLUTION` ×2), 4 SKIPPED (`UPSTREAM_FAILED`). The interrupted worker's 2 jobs were retried and succeeded. Every job matched its expected outcome (exit code 0); the run took 152 s with 5 paced workers.
+
+Found while testing: on Windows, `localhost` resolves to IPv6 first while the coordinator listens on IPv4 127.0.0.1, so Python clients waited about 2 s per request. The script now uses 127.0.0.1.
+
 ## Not verified
 
 - Container isolation (Docker not installed).
