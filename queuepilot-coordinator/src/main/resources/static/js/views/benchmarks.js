@@ -19,7 +19,7 @@ function bars(rows, key, format, lowerIsBetter = true) {
 function simulated(report) {
     return report.summary.scenarios.map(s => card(`${s.scenario.replaceAll('_', ' ')}`, null,
         h('p', { class: 'muted small' }, s.description),
-        h('div', { class: 'grid two' },
+        h('div', { class: 'grid cols-2' },
             h('div', {}, h('h3', {}, 'Average waiting time'), bars(s.results, 'avgWaitMs', fmtDuration)),
             h('div', {}, h('h3', {}, 'Longest wait (starvation indicator)'), bars(s.results, 'maxWaitMs', fmtDuration))),
         h('div', { style: { marginTop: '14px' } }, table([
