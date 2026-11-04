@@ -16,7 +16,7 @@ Prerequisite: `./mvnw install -DskipTests`, then `scripts/start-demo.ps1` (Windo
 | 10. Workflow | **Workflows → Submit workflow** (template prefilled) | Graph runs ingest → validate → 3 parallel simulations → combine → verify |
 | 11. Failure propagation | Submit a workflow whose first step has an impossible input, e.g. sorting with `{}` | First step FAILED, every later step SKIPPED |
 | 12. Files | Submit *file-checksum* or *text-analysis* with an uploaded file | Output digest / CSV artifact downloadable from the job drawer |
-| 13. Benchmarks | Run the two commands in [benchmark-methodology.md](../testing/benchmark-methodology.md) with `--publish` | **Benchmarks** page shows SIMULATED and MEASURED reports separately |
+| 13. Benchmarks | Run the two commands in [benchmark-methodology.md](../testing/benchmark-methodology.md) | Results are written to `benchmark-results/`; they are not shown on the dashboard |
 
 **Load test:** `python scripts/simulate_jobs.py --chaos` submits 50 jobs (38 succeed, 8 fail, 4 are skipped) and checks every outcome. See [simulating-50-jobs.md](simulating-50-jobs.md).
 

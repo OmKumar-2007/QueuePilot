@@ -50,7 +50,7 @@ async function draw() {
         preview.notReady.length ? h('div', { class: 'section' }, card(`Not ready yet (${preview.notReady.length})`, null, table([
             { label: 'Job', render: e => e.name },
             { label: 'Why', render: e => e.reason },
-        ], preview.notReady, e => openJob(e.jobId)))) : null,
+        ], preview.notReady, e => openJob(e.jobId)))) : '',
         settingsForm(settings));
 }
 

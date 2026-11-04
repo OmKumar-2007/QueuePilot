@@ -32,19 +32,27 @@ public class EventLog {
     }
 
     public List<EventView> recent(int limit) {
-        return repository.findAllByOrderByIdDesc(PageRequest.of(0, Math.max(1, Math.min(limit, 500))))
-                .stream().map(EventView::from).toList();
+        return recent(limit, null);
+    }
+
+    /** Newest first. With {@code beforeId}, the page of events older than that id, so callers can walk all of history. */
+    public List<EventView> recent(int limit, Long beforeId) {
+        PageRequest page = PageRequest.of(0, Math.max(1, Math.min(limit, 500)));
+        List<SystemEventEntity> events = beforeId == null
+                ? repository.findAllByOrderByIdDesc(page)
+                : repository.findByIdLessThanOrderByIdDesc(beforeId, page);
+        return events.stream().map(EventView::from).toList();
     }
 
     public List<EventView> forJob(String jobId) {
         return repository.findByJobIdOrderByIdAsc(jobId).stream().map(EventView::from).toList();
     }
 
-    public record EventView(long id, Instant occurredAt, EventType type, String jobId, String workerId,
+    public record EventView(long id, Instant occurredAt, EventType type, String status, String jobId, String workerId,
                             String attemptId, String message) {
         static EventView from(SystemEventEntity e) {
-            return new EventView(e.getId(), e.getOccurredAt(), e.getType(), e.getJobId(), e.getWorkerId(),
-                    e.getAttemptId(), e.getMessage());
+            return new EventView(e.getId(), e.getOccurredAt(), e.getType(), EventStatus.of(e.getType(), e.getMessage()),
+                    e.getJobId(), e.getWorkerId(), e.getAttemptId(), e.getMessage());
         }
     }
 }

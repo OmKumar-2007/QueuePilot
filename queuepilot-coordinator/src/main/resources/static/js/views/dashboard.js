@@ -178,7 +178,7 @@ function build(root) {
         h('div', { class: 'section' }, h('div', { class: 'section-head' }, h('h2', {}, 'Workers'), parts.workerSummary), parts.workers),
         h('div', { class: 'section grid cols-2' },
             card('Up next', h('a', { href: '#/scheduler', class: 'small' }, 'Scheduler →'), parts.upNext),
-            card('Activity', null, parts.activity)));
+            card('Activity', h('a', { href: '#/logs', class: 'small' }, 'All logs →'), parts.activity)));
 }
 
 export default {

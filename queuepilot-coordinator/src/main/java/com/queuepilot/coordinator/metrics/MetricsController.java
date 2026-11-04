@@ -29,8 +29,9 @@ public class MetricsController {
     }
 
     @GetMapping("/api/events")
-    public List<EventView> events(@RequestParam(defaultValue = "100") int limit) {
-        return events.recent(limit);
+    public List<EventView> events(@RequestParam(defaultValue = "100") int limit,
+                                  @RequestParam(required = false) Long beforeId) {
+        return events.recent(limit, beforeId);
     }
 
     /** Liveness plus a real database round trip. */

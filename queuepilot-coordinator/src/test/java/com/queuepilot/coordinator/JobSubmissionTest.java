@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -50,6 +51,23 @@ class JobSubmissionTest extends CoordinatorTestBase {
         mvc.perform(post("/api/jobs").contentType("application/json").content("{not json"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
         assertThat(jobRows()).isZero();
+    }
+
+    @Test
+    void eventsCarryAStatusAndOlderPagesCanBeRead() throws Exception {
+        String first = submitId(piJob(10_000));
+        Map<String, Object> dependant = new java.util.HashMap<>(piJob(10_000));
+        dependant.put("dependsOn", java.util.List.of(first));
+        submit(dependant);
+
+        JsonNode newest = body(mvc.perform(get("/api/events?limit=1")).andReturn());
+        assertThat(newest).hasSize(1);
+        assertThat(newest.get(0).get("status").asText()).isEqualTo("BLOCKED");
+
+        JsonNode older = body(mvc.perform(get("/api/events?limit=1&beforeId=" + newest.get(0).get("id").asLong())).andReturn());
+        assertThat(older).hasSize(1);
+        assertThat(older.get(0).get("status").asText()).isEqualTo("QUEUED");
+        assertThat(older.get(0).get("jobId").asText()).isEqualTo(first);
     }
 
     @Test

@@ -7,9 +7,9 @@ import submit from './views/submit.js';
 import workflows from './views/workflows.js';
 import scheduler from './views/scheduler.js';
 import tasks from './views/tasks.js';
-import benchmarks from './views/benchmarks.js';
+import logs from './views/logs.js';
 
-const routes = { dashboard, workers: dashboard, overview: dashboard, jobs, submit, workflows, scheduler, tasks, benchmarks };
+const routes = { dashboard, workers: dashboard, overview: dashboard, jobs, submit, workflows, scheduler, tasks, logs };
 let current = null;
 let timer = null;
 
@@ -49,6 +49,25 @@ async function updateHealth() {
     }
 }
 
+/** index.html sets the initial theme before first paint; this keeps the button in step and saves changes. */
+function setupThemeToggle() {
+    const button = document.getElementById('theme-toggle');
+    const label = () => {
+        const text = document.documentElement.dataset.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        button.title = text;
+        button.setAttribute('aria-label', text);
+    };
+    button.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try {
+            localStorage.setItem('queuepilot-theme', next);
+        } catch { /* storage blocked: the choice lasts until the page reloads */ }
+        label();
+    });
+    label();
+}
+
 /** Runs an action, shows a confirmation or the error. */
 export async function act(action, successMessage) {
     try {
@@ -62,6 +81,7 @@ export async function act(action, successMessage) {
 }
 
 window.addEventListener('hashchange', navigate);
+setupThemeToggle();
 updateHealth();
 setInterval(updateHealth, 5000);
 navigate();

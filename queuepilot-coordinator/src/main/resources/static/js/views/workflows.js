@@ -93,7 +93,7 @@ async function draw() {
         selected ? card(selected.name, h('div', { class: 'row' }, badge(selected.state), h('span', { class: 'muted small' }, `${selected.percentComplete}% done`)),
             progress(selected.percentComplete, selected.state === 'SUCCEEDED'),
             h('div', { style: { marginTop: '14px' } }, dagView(selected)),
-            h('p', { class: 'muted small' }, 'Click a step to see its job.')) : null,
+            h('p', { class: 'muted small' }, 'Click a step to see its job.')) : '',
         h('div', { class: 'section' }, card('All workflows', null, workflows.length ? table([
             { label: 'Name', render: w => w.name },
             { label: 'State', render: w => badge(w.state) },

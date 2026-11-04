@@ -21,6 +21,7 @@ async function loadWorkerNames() {
 const columns = [
     { label: 'Job', render: j => h('div', {}, j.label, h('div', { class: 'muted mono' }, shortId(j.id))) },
     { label: 'Task', render: j => j.taskType },
+    { label: 'Priority', num: true, render: j => j.priority },
     { label: 'Status', render: j => badge(j.state) },
     { label: 'Progress', render: j => h('div', { style: { minWidth: '110px' } }, progress(j.progressPercent, j.state === 'SUCCEEDED')) },
     { label: 'Worker', render: j => workerNames.get(j.currentWorkerId) || '—' },
