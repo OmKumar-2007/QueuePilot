@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.queuepilot</groupId>
+        <artifactId>queuepilot-parent</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>queuepilot-coordinator</artifactId>
+    <name>QueuePilot Coordinator</name>
+    <description>REST API, persistence, scheduling, recovery and dashboard. Never executes task code.</description>
+
+    <properties>
+        <module.dir>coordinator</module.dir>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.queuepilot</groupId>
+            <artifactId>queuepilot-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Real worker runtime for end-to-end tests against a running coordinator. -->
+        <dependency>
+            <groupId>com.queuepilot</groupId>
+            <artifactId>queuepilot-worker</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Real PostgreSQL binaries for one integration test, without installing PostgreSQL. -->
+        <dependency>
+            <groupId>io.zonky.test</groupId>
+            <artifactId>embedded-postgres</artifactId>
+            <version>2.0.7</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <directory>${project.basedir}/../../target/coordinator</directory>
+        <resources>
+            <resource>
+                <directory>${project.basedir}/../../resources/coordinator</directory>
+            </resource>
+            <!-- Built-in task manifests are seeded into the registry at startup.
+                 Copying the JSON (not the code) keeps the coordinator free of plugin classes. -->
+            <resource>
+                <directory>${project.basedir}/../../resources/tasks/META-INF/queuepilot/tasks</directory>
+                <targetPath>seed-tasks</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- Copies third-party jars to target/coordinator/libs, which is where VS Code finds them
+                 (see .vscode/settings.json). This module's classpath covers every other module's too. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>libs-for-vscode</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
+                            <excludeGroupIds>com.queuepilot</excludeGroupIds>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -26,17 +26,23 @@ Clients submit jobs for **registered task types**. A **coordinator** validates a
 
 Java 21 · Spring Boot 3.3 · Spring Data JPA + Flyway · PostgreSQL (H2 in PostgreSQL mode by default) · plain HTML/CSS/JS · Maven multi-module · JUnit 5.
 
-## Modules
+## Project structure
 
 ```
-queuepilot-task-api        plugin contract (no dependencies)
-queuepilot-core            scheduling policies, DAG, state machine, schemas, protocol, metrics (no Spring)
-queuepilot-tasks-builtin   built-in task plugins + manifests
-queuepilot-example-plugin  a third-party plugin built only against task-api
-queuepilot-coordinator     Spring Boot REST API, persistence, scheduler, recovery, dashboard
-queuepilot-worker          standalone worker process
-queuepilot-benchmarks      standalone benchmark runner
+src/                 all Java code; each folder is one module and one package
+  taskapi/           plugin contract (no dependencies)
+  core/              scheduling policies, DAG, state machine, schemas, protocol, metrics (no Spring)
+  tasks/             built-in task plugins
+  plugins/           example third-party plugin, built only against taskapi
+  coordinator/       Spring Boot REST API, persistence, scheduler, recovery
+  worker/            standalone worker process
+  benchmarks/        standalone benchmark runner
+tests/               tests, with the same folders as src/
+resources/           non-Java files: config, database migrations, dashboard, task manifests
+target/              build output, for example target/coordinator/ and target/worker/
 ```
+
+Each folder in `src/` has its own small `pom.xml`, so the coordinator, the worker and the plugin stay separate jars.
 
 ## Quick start
 
@@ -49,7 +55,7 @@ Run all commands from the repository root:
 ```
 
 ```bash
-java -jar queuepilot-coordinator/target/queuepilot-coordinator-1.0.0.jar
+java -jar target/coordinator/queuepilot-coordinator-1.0.0.jar
 ```
 
 Open http://localhost:8080. There is no login of any kind: the coordinator only listens on 127.0.0.1, and workers simply register and then identify themselves with their worker id (`X-Worker-Id` header).
@@ -57,11 +63,11 @@ Open http://localhost:8080. There is no login of any kind: the coordinator only 
 Start workers in other terminals:
 
 ```bash
-java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-1 --slots 2
+java -jar target/worker/queuepilot-worker-1.0.0-exec.jar --name worker-1 --slots 2
 ```
 
 ```bash
-java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-2 --slots 2
+java -jar target/worker/queuepilot-worker-1.0.0-exec.jar --name worker-2 --slots 2
 ```
 
 Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/start-demo.sh`: the coordinator plus four workers with 2 slots each and demo pacing. On the **Live** page click **Run demo jobs** and watch the workers; use **Pause**, **Interrupt**, **Freeze**, **Crash** and **+ Add worker**. The [demo guide](docs/guides/running-the-demo.md) walks through crash recovery, workflows and benchmarks. To load the system with a mix of 50 succeeding and failing jobs, run `python scripts/simulate_jobs.py --chaos`.

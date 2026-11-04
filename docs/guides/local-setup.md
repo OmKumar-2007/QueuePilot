@@ -3,10 +3,10 @@
 1. Install a JDK 21 (e.g. Temurin) and check `java -version`.
 2. Clone the repository. Maven is not required: use `./mvnw` (or `mvnw.cmd` on Windows).
 3. Build and test: `./mvnw verify` (first run downloads dependencies, including embedded PostgreSQL binaries for one test).
-4. Start the coordinator: `java -jar queuepilot-coordinator/target/queuepilot-coordinator-1.0.0.jar`
+4. Start the coordinator: `java -jar target/coordinator/queuepilot-coordinator-1.0.0.jar`
    - Listens on `127.0.0.1:8080` only.
    - Creates `data/` (database, artifacts, generated secrets).
-5. Start one or more workers: `java -jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar --name worker-1 --slots 2`
+5. Start one or more workers: `java -jar target/worker/queuepilot-worker-1.0.0-exec.jar --name worker-1 --slots 2`
    - Run from the same folder so the worker finds `data/worker-secret.txt`, or set `QP_WORKER_SECRET`.
    - `--help` lists all options (capabilities, plugins folder, containers).
 6. Open http://localhost:8080.
@@ -23,4 +23,6 @@
 
 ## IDE
 
-Import the root `pom.xml` as a Maven project. Run `QueuePilotCoordinatorApplication` and `WorkerMain` (program arguments `--name w1`) directly from the IDE; set the working directory to the repository root.
+VS Code works out of the box: `.vscode/settings.json` treats `src/` and `tests/` as plain source folders, because Maven import does not support one `src/` folder shared by several modules. Run `./mvnw install -DskipTests` once first, so the libraries exist in `target/coordinator/libs/`.
+
+Build, test and run with `./mvnw` and the jars, not the IDE: the editor sees every module on one classpath and without `resources/`, so only Maven enforces module boundaries.

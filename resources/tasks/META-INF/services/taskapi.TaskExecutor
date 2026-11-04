@@ -1,0 +1,5 @@
+tasks.SortingTask
+tasks.TextAnalysisTask
+tasks.MonteCarloPiTask
+tasks.FileChecksumTask
+tasks.JavaScriptTask

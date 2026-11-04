@@ -130,31 +130,25 @@ flowchart TB
 
 ```
 queuepilot/
-├── pom.xml                                   (parent, dependency versions)
-├── queuepilot-task-api/  com.queuepilot.task
-│     TaskExecutor, TaskContext, TaskInput, TaskOutput, TaskFailure, ProgressReporter
-├── queuepilot-core/      com.queuepilot.core
-│     job/        JobState, AttemptState, JobStateMachine, SchedulableJob
-│     scheduling/ SchedulingPolicy, FcfsPolicy, PriorityAgingPolicy, SjfPolicy,
-│                 PolicyType, QueueRotation, ReadinessRules
-│     workflow/   DependencyGraph, CycleDetectedException
-│     schema/     FieldSpec, FieldType, InputSchema, InputValidator, ValidationError
-│     protocol/   RegisterWorkerRequest, ClaimResponse, HeartbeatRequest, ... (records)
-├── queuepilot-tasks-builtin/  com.queuepilot.tasks.builtin
-│     sorting/, text/, math/, checksum/   + META-INF/services + queuepilot-task.json manifests
-├── queuepilot-coordinator/    com.queuepilot.coordinator
-│     config/  security/  web/ (controllers, dto, error handling)
-│     job/  workflow/  task/  scheduler/  worker/  attempt/  recovery/  artifact/  event/  metrics/
-│     resources/ db/migration (Flyway), static/ (dashboard)
-├── queuepilot-worker/         com.queuepilot.worker
-│     WorkerMain, WorkerConfig, CoordinatorClient, ClaimLoop, AttemptRunner,
-│     HeartbeatSender, PluginLoader, (Phase 9) ContainerTaskRunner
-└── queuepilot-benchmarks/     com.queuepilot.benchmarks
-      simulation/ (virtual clock, workload generator, metrics)
-      execution/  (drives real coordinator + workers)   report/
+├── pom.xml                  (parent: dependency versions and the shared build layout)
+├── src/                     one flat folder per module; the folder name is the Java package
+│   ├── taskapi/             TaskExecutor, TaskContext, TaskInput, TaskOutput, TaskFailure, ...
+│   ├── core/                job states, scheduling policies, DAG, input schemas, protocol, metrics
+│   ├── tasks/               built-in tasks: sorting, text analysis, Monte Carlo pi, checksum, JavaScript
+│   ├── plugins/             example third-party plugin: prime sieve, N-Queens
+│   ├── coordinator/         REST controllers, services, repositories, scheduler, recovery
+│   ├── worker/              WorkerMain, WorkerConfig, WorkerRuntime, TaskExecutorRegistry, ...
+│   └── benchmarks/          simulation, real execution runs, reports
+├── tests/                   same folders as src/, same packages
+└── resources/
+    ├── coordinator/         application.yml, db/migration (Flyway), static/ (dashboard)
+    ├── tasks/               META-INF/services + task manifests
+    └── plugins/             META-INF/services + task manifests
 ```
 
-Organisation is **by feature** inside the coordinator (all job code in `job/`), which keeps related controller-service-repository code together and is easier for a team of four to split.
+Each `src/<name>/` holds a small `pom.xml`, so each module still builds its own jar under `target/<name>/`. All modules share the `src/` source root, because a Java package must match its folder; the parent `pom.xml` limits each module to its own folder and its declared dependencies.
+
+Classes inside the coordinator are grouped by name prefix (`Job*`, `Worker*`, `Task*`) rather than by sub-folder.
 
 ## 6. Core classes
 

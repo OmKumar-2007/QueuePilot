@@ -1,6 +1,6 @@
 # Adding a Task Type
 
-This is exactly how `queuepilot-example-plugin` (prime sieve) was added. No file in the coordinator, core or worker changes.
+This is exactly how the example plugin in `src/plugins/` (prime sieve) was added. No file in the coordinator, core or worker changes.
 
 ## 1. Create a plugin project
 
@@ -39,16 +39,16 @@ Rules:
 
 ## 3. Declare it
 
-- `src/main/resources/META-INF/services/com.queuepilot.task.TaskExecutor` containing `com.example.primes.PrimeSieveTask`
-- `src/main/resources/META-INF/queuepilot/tasks/prime-sieve.json`: the manifest (schema, capabilities, timeout, retries, …)
+- `resources/plugins/META-INF/services/taskapi.TaskExecutor` containing `plugins.PrimeSieveTask`
+- `resources/plugins/META-INF/queuepilot/tasks/prime-sieve.json`: the manifest (schema, capabilities, timeout, retries, …)
 
 ## 4. Build and install on a worker
 
 ```bash
-./mvnw -pl queuepilot-example-plugin package
+./mvnw -pl src/plugins -am package
 ```
 
-Copy `queuepilot-example-plugin/target/queuepilot-example-plugin-1.0.0.jar` into a plugins folder and (re)start a worker with `--plugins <folder>`. Its log shows `Loaded task implementations: [..., prime-sieve@1.0.0, ...]`.
+Copy `target/plugins/queuepilot-example-plugin-1.0.0.jar` into a plugins folder and (re)start a worker with `--plugins <folder>`. Its log shows `Loaded task implementations: [..., prime-sieve@1.0.0, ...]`.
 
 ## 5. Register and enable
 
@@ -56,7 +56,7 @@ Dashboard → **Task registry** → paste the manifest → *Register*, then open
 
 ```bash
 curl -u admin:$QP_ADMIN_PASSWORD -H "Content-Type: application/json" \
-     --data @queuepilot-example-plugin/src/main/resources/META-INF/queuepilot/tasks/prime-sieve.json \
+     --data @resources/plugins/META-INF/queuepilot/tasks/prime-sieve.json \
      http://localhost:8080/api/admin/tasks
 ```
 
@@ -64,7 +64,7 @@ curl -u admin:$QP_ADMIN_PASSWORD -H "Content-Type: application/json" \
 
 Submit job → *Prime sieve* → limit 50000000. Only workers that advertise `prime-sieve@1.0.0` will receive it.
 
-To ship it as a built-in instead, add the class to `queuepilot-tasks-builtin` and the manifest to its `META-INF/queuepilot/tasks/`; the coordinator seeds it at startup.
+To ship it as a built-in instead, add the class to `src/tasks/` and the manifest to `resources/tasks/META-INF/queuepilot/tasks/`; the coordinator seeds it at startup.
 
 ## Non-Java tasks (containers, Phase 9)
 

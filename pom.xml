@@ -26,13 +26,13 @@
     </properties>
 
     <modules>
-        <module>queuepilot-task-api</module>
-        <module>queuepilot-core</module>
-        <module>queuepilot-tasks-builtin</module>
-        <module>queuepilot-example-plugin</module>
-        <module>queuepilot-coordinator</module>
-        <module>queuepilot-worker</module>
-        <module>queuepilot-benchmarks</module>
+        <module>src/taskapi</module>
+        <module>src/core</module>
+        <module>src/tasks</module>
+        <module>src/plugins</module>
+        <module>src/coordinator</module>
+        <module>src/worker</module>
+        <module>src/benchmarks</module>
     </modules>
 
     <dependencyManagement>
@@ -54,4 +54,54 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <!-- Project layout: every module keeps its code flat in src/<name>/ (package <name>), its tests in
+         tests/<name>/ and its non-Java files in resources/<name>/. Each module's pom.xml sets module.dir
+         to <name>; everything below is shared. All modules compile against the one src/ root, so the
+         includes and the -sourcepath override keep each module to its own folder and declared dependencies. -->
+    <build>
+        <sourceDirectory>${project.basedir}/..</sourceDirectory>
+        <testSourceDirectory>${project.basedir}/../../tests</testSourceDirectory>
+        <resources>
+            <resource>
+                <directory>${project.basedir}/../../resources/${module.dir}</directory>
+            </resource>
+        </resources>
+        <testResources>
+            <testResource>
+                <directory>${project.basedir}/../../tests/${module.dir}</directory>
+                <excludes>
+                    <exclude>**/*.java</exclude>
+                </excludes>
+            </testResource>
+        </testResources>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <includes>
+                            <include>${module.dir}/*.java</include>
+                        </includes>
+                        <testIncludes>
+                            <testInclude>${module.dir}/*.java</testInclude>
+                        </testIncludes>
+                        <compilerArgs>
+                            <arg>-sourcepath</arg>
+                            <arg>${project.build.directory}/no-sourcepath</arg>
+                        </compilerArgs>
+                    </configuration>
+                </plugin>
+                <!-- Tests run from the repository root, the same place the app is run from. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <configuration>
+                        <workingDirectory>${project.basedir}/../..</workingDirectory>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>

@@ -44,7 +44,7 @@ public interface TaskContext {
 - `TaskInput` wraps the validated JSON input (typed getters: `getInt`, `getString`, `getIntList`, …).
 - `TaskOutput` is a small JSON object plus optional output artifact IDs.
 - `TaskFailure` carries `retryable` (e.g. transient I/O) vs permanent (e.g. input that validates but cannot be processed). Any other exception is treated as retryable.
-- Implementations are discovered with `java.util.ServiceLoader` via `META-INF/services/com.queuepilot.task.TaskExecutor`.
+- Implementations are discovered with `java.util.ServiceLoader` via `META-INF/services/taskapi.TaskExecutor`.
 
 ## Manifest (`queuepilot-task.json`)
 
@@ -80,7 +80,7 @@ Field types supported by the built-in validator (ADR-007): `STRING`, `INTEGER`, 
 
 1. Create a Maven project depending only on `queuepilot-task-api`.
 2. Implement `TaskExecutor`; add the `META-INF/services` line and the manifest.
-3. `mvn package` → drop the jar into `queuepilot-worker/plugins/`, restart that worker.
+3. `mvn package` → drop the jar into the worker's plugins folder (`--plugins`, default `./plugins`), restart that worker.
 4. In the dashboard (Task Registry → Register), paste/upload the manifest; enable it.
 5. Submit a job. **No change** to the coordinator, scheduler or core.
 

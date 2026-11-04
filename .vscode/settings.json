@@ -1,0 +1,7 @@
+{
+    // Maven builds this project, but its import can't handle one shared src/ folder, so VS Code
+    // treats src/ and tests/ as plain source folders. Run ./mvnw install once to create the libs.
+    "java.import.maven.enabled": false,
+    "java.project.sourcePaths": ["src", "tests"],
+    "java.project.referencedLibraries": ["target/coordinator/libs/*.jar"]
+}

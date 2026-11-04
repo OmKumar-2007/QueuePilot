@@ -28,7 +28,7 @@ from pathlib import Path
 TERMINAL = {"SUCCEEDED", "FAILED", "SKIPPED", "CANCELLED"}
 FAILED_STATES = {"FAILED", "SKIPPED", "CANCELLED"}
 NQUEENS_MANIFEST = Path(__file__).resolve().parent.parent / \
-    "queuepilot-example-plugin/src/main/resources/META-INF/queuepilot/tasks/n-queens.json"
+    "resources/plugins/META-INF/queuepilot/tasks/n-queens.json"
 
 
 class Api:

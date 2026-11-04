@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:queuepilot-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+
+queuepilot:
+  data-dir: target/coordinator/test-data
+  recovery-enabled: false
+  lease-duration-ms: 10000
+  worker-timeout-ms: 10000
+
+logging:
+  level:
+    coordinator: WARN
+    core: WARN
+    worker: WARN

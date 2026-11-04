@@ -5,7 +5,7 @@ Benchmarks live in the separate `queuepilot-benchmarks` module. The coordinator 
 ## A. Scheduling algorithm benchmark (SIMULATED)
 
 ```bash
-java -jar queuepilot-benchmarks/target/queuepilot-benchmarks-1.0.0.jar simulate --jobs 200 --workers 4 --seed 42 --seeds 5
+java -jar target/benchmarks/queuepilot-benchmarks-1.0.0.jar simulate --jobs 200 --workers 4 --seed 42 --seeds 5
 ```
 
 - **Engine:** discrete-event simulation with a virtual clock and N identical, non-preemptive workers. At every decision the ready jobs are ordered by **the same `SchedulingPolicy` classes the coordinator uses**.
@@ -22,8 +22,8 @@ Example result on this machine (200 jobs, 4 workers, 5 seeds, `PRIORITY_SKEW`): 
 ## B. Real execution benchmark (MEASURED)
 
 ```bash
-java -jar queuepilot-benchmarks/target/queuepilot-benchmarks-1.0.0.jar execute \
-     --worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar \
+java -jar target/benchmarks/queuepilot-benchmarks-1.0.0.jar execute \
+     --worker-jar target/worker/queuepilot-worker-1.0.0-exec.jar \
      --worker-counts 1,2,4 --slots 1 \
      --workloads "monte-carlo-pi:samples=40000000;sorting:count=2000000" \
      --jobs 8 --warmup 1 --reps 3 --publish

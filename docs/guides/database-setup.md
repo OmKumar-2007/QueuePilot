@@ -18,7 +18,7 @@ The coordinator stores its database in `data/db/` using H2 in **PostgreSQL compa
 
    ```powershell
    $env:QP_DB_PASSWORD = "choose-a-password"
-   java -jar queuepilot-coordinator/target/queuepilot-coordinator-1.0.0.jar --spring.profiles.active=postgres
+   java -jar target/coordinator/queuepilot-coordinator-1.0.0.jar --spring.profiles.active=postgres
    ```
 
    Optional: `QP_DB_URL` (default `jdbc:postgresql://localhost:5432/queuepilot`) and `QP_DB_USER` (default `queuepilot`).
