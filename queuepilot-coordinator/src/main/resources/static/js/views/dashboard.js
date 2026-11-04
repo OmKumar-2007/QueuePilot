@@ -77,8 +77,7 @@ function updateCard(worker, runningJobs) {
         ...Array.from({ length: worker.concurrencyLimit }, (_, i) => slotView(jobs[i])),
         h('div', { class: 'row small muted' },
             h('span', {}, `${worker.succeededAttempts} done`), h('span', {}, '·'),
-            h('span', {}, `heartbeat ${relative(worker.lastHeartbeatAt)}`),
-            worker.demoPaceMs ? h('span', { title: 'Demo pacing: the worker waits this long per percent of progress so jobs can be watched' }, `· paced ${worker.demoPaceMs} ms/%`) : null));
+            h('span', {}, `heartbeat ${relative(worker.lastHeartbeatAt)}`)));
     if (entry.status !== worker.status) {
         entry.actions.replaceChildren(...controlsFor(worker));
         entry.status = worker.status;
