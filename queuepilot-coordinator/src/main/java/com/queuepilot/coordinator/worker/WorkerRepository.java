@@ -8,11 +8,8 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 
 public interface WorkerRepository extends JpaRepository<WorkerEntity, String> {
-
-    Optional<WorkerEntity> findByTokenHash(String tokenHash);
 
     List<WorkerEntity> findByStatusIn(Collection<WorkerStatus> statuses);
 
@@ -20,5 +17,5 @@ public interface WorkerRepository extends JpaRepository<WorkerEntity, String> {
             + "com.queuepilot.core.job.WorkerStatus.DRAINING, com.queuepilot.core.job.WorkerStatus.PAUSED) and w.lastHeartbeatAt < :cutoff")
     List<String> findSilentWorkerIds(@Param("cutoff") Instant cutoff);
 
-    List<WorkerEntity> findAllByOrderByRegisteredAtDesc();
+    List<WorkerEntity> findAllByOrderByNameAsc();
 }

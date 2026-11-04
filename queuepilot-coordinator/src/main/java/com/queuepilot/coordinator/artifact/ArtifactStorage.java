@@ -10,14 +10,14 @@ import java.io.InputStream;
  */
 public interface ArtifactStorage {
 
-    /** Stores the stream under a new generated key, rejecting anything larger than {@code maxBytes}. */
-    StoredFile store(InputStream content, long maxBytes) throws IOException;
+    /** Stores the stream under {@code key} (the artifact id), rejecting anything larger than {@code maxBytes}. */
+    StoredFile store(String key, InputStream content, long maxBytes) throws IOException;
 
-    InputStream open(String storageKey) throws IOException;
+    InputStream open(String key) throws IOException;
 
-    void delete(String storageKey) throws IOException;
+    void delete(String key) throws IOException;
 
-    record StoredFile(String storageKey, long sizeBytes, String sha256) {
+    record StoredFile(long sizeBytes, String sha256) {
     }
 
     class TooLargeException extends IOException {

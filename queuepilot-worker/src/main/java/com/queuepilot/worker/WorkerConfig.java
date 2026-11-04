@@ -1,27 +1,18 @@
 package com.queuepilot.worker;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Command-line settings of a worker process, e.g.
- * <pre>java -jar queuepilot-worker.jar --name w1 --slots 2 --capabilities cpu,io,text</pre>
+ * <pre>java -jar queuepilot-worker.jar --name w1 --slots 2</pre>
  */
 public record WorkerConfig(String coordinatorUrl,
                            String name,
                            int slots,
-                           List<String> capabilities,
-                           String enrollSecret,
                            Path pluginsDir,
                            Path workDir,
-                           boolean containersEnabled,
-                           String dockerCommand,
                            long paceMsPerPercent,
                            long freezeMs) {
 
@@ -30,41 +21,22 @@ public record WorkerConfig(String coordinatorUrl,
               --coordinator URL      coordinator base URL (default http://localhost:8080)
               --name NAME            worker name (default worker-<pid>)
               --slots N              concurrent attempts (default 2)
-              --capabilities a,b     advertised capabilities (default cpu,io,text)
-              --secret-file PATH     enrollment secret file (default ./data/worker-secret.txt);
-                                     the QP_WORKER_SECRET environment variable takes precedence
               --plugins DIR          extra plugin jars (default ./plugins)
               --work-dir DIR         scratch space (default ./data/worker-work/<name>)
-              --containers           also run CONTAINER tasks with Docker (Phase 9)
-              --docker CMD           docker executable (default docker)
               --pace-ms N            demo pacing: wait N ms per percent of progress so jobs can be
                                      watched (default 0 = full speed; never use for benchmarks)
               --freeze-ms N          how long a FREEZE simulation stops heartbeats (default 20000)
             """;
 
-    public static WorkerConfig fromArgs(String[] args) throws IOException {
+    public static WorkerConfig fromArgs(String[] args) {
         Map<String, String> options = parse(args);
         String name = options.getOrDefault("name", "worker-" + ProcessHandle.current().pid());
-        String secret = System.getenv("QP_WORKER_SECRET");
-        if (secret == null || secret.isBlank()) {
-            Path secretFile = Path.of(options.getOrDefault("secret-file", "./data/worker-secret.txt"));
-            if (!Files.exists(secretFile)) {
-                throw new IllegalArgumentException("No enrollment secret: set QP_WORKER_SECRET or create " + secretFile.toAbsolutePath());
-            }
-            secret = Files.readString(secretFile, StandardCharsets.UTF_8).trim();
-        }
-        List<String> capabilities = Arrays.stream(options.getOrDefault("capabilities", "cpu,io,text").split(","))
-                .map(String::trim).filter(s -> !s.isEmpty()).toList();
         return new WorkerConfig(
                 stripSlash(options.getOrDefault("coordinator", "http://localhost:8080")),
                 name,
                 Integer.parseInt(options.getOrDefault("slots", "2")),
-                capabilities,
-                secret,
                 Path.of(options.getOrDefault("plugins", "./plugins")),
                 Path.of(options.getOrDefault("work-dir", "./data/worker-work/" + name)),
-                options.containsKey("containers"),
-                options.getOrDefault("docker", "docker"),
                 Long.parseLong(options.getOrDefault("pace-ms", "0")),
                 Long.parseLong(options.getOrDefault("freeze-ms", "20000")));
     }

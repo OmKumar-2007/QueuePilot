@@ -34,7 +34,7 @@ function fieldControl(spec) {
             break;
         case 'FILE':
             input = h('input', { type: 'file' });
-            read = async clientId => (input.files.length ? (await api.upload(input.files[0], clientId)).id : undefined);
+            read = async () => (input.files.length ? (await api.upload(input.files[0])).id : undefined);
             break;
         default:
             input = spec.maxLength > 200 ? h('textarea', { rows: 4 }) : h('input', {});
@@ -46,25 +46,20 @@ function fieldControl(spec) {
 }
 
 function render(root, tasks) {
-    const enabled = tasks.filter(t => t.enabled);
-    const taskSelect = h('select', {}, enabled.map(t => h('option', { value: t.id }, t.displayName)));
+    const taskSelect = h('select', {}, tasks.map(t => h('option', { value: t.id }, t.displayName)));
     const description = h('small');
     const inputs = h('div', { class: 'form-grid' });
     let controls = [];
 
     const priority = h('input', { type: 'number', min: 1, max: 10 });
-    const name = h('input', { placeholder: 'Defaults to the task name' });
     const estimate = h('input', { type: 'number', min: 1, placeholder: 'ms' });
     const queue = h('input', { placeholder: 'default' });
-    const startAt = h('input', { type: 'datetime-local' });
-    const deadline = h('input', { type: 'datetime-local' });
     const dependsOn = h('input', { placeholder: 'Job ids, comma-separated' });
-    const clientId = h('input', { value: 'dashboard' });
     const errors = h('ul', { class: 'errors' });
     const submitButton = h('button', { class: 'button', type: 'submit' }, 'Submit');
 
     function selectTask() {
-        const task = enabled.find(t => t.id === taskSelect.value);
+        const task = tasks.find(t => t.id === taskSelect.value);
         description.textContent = task?.description || '';
         controls = task ? task.inputSchema.fields.map(fieldControl) : [];
         inputs.replaceChildren(...controls.map(c => c.element));
@@ -73,7 +68,6 @@ function render(root, tasks) {
     taskSelect.onchange = selectTask;
     selectTask();
 
-    const toIso = value => (value ? new Date(value).toISOString() : undefined);
     const form = h('form', {
         class: 'card', style: { maxWidth: '720px' },
         onsubmit: async event => {
@@ -81,20 +75,20 @@ function render(root, tasks) {
             errors.replaceChildren();
             submitButton.disabled = true;
             try {
-                const task = enabled.find(t => t.id === taskSelect.value);
+                const task = tasks.find(t => t.id === taskSelect.value);
                 const input = {};
                 for (const control of controls) {
-                    const value = await control.read(clientId.value);
+                    const value = await control.read();
                     if (value !== undefined) input[control.spec.name] = value;
                 }
                 const job = await api.post('/api/jobs', {
-                    name: name.value || undefined, taskType: task.taskType, taskVersion: task.version, input,
+                    taskType: task.taskType, input,
                     priority: priority.value ? Number(priority.value) : undefined,
                     estimatedMs: estimate.value ? Number(estimate.value) : undefined,
-                    queue: queue.value || undefined, startAt: toIso(startAt.value), deadline: toIso(deadline.value),
+                    queue: queue.value || undefined,
                     dependsOn: dependsOn.value ? dependsOn.value.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-                }, clientId.value);
-                toast(`Submitted: ${job.name}`);
+                });
+                toast(`Submitted: ${job.label}`);
                 openJob(job.id);
             } catch (error) {
                 const fieldErrors = error instanceof ApiError ? error.body?.fieldErrors || [] : [];
@@ -110,18 +104,14 @@ function render(root, tasks) {
     h('div', { class: 'field', style: { maxWidth: '220px' } }, h('label', {}, 'Priority'), priority),
     h('details', {}, h('summary', {}, 'More options'),
         h('div', { class: 'form-grid' },
-            h('div', { class: 'field' }, h('label', {}, 'Name'), name),
             h('div', { class: 'field' }, h('label', {}, 'Estimated duration'), estimate, h('small', {}, 'Used by Shortest Job First')),
             h('div', { class: 'field' }, h('label', {}, 'Queue'), queue),
-            h('div', { class: 'field' }, h('label', {}, 'Start at'), startAt),
-            h('div', { class: 'field' }, h('label', {}, 'Deadline'), deadline),
-            h('div', { class: 'field' }, h('label', {}, 'Depends on'), dependsOn),
-            h('div', { class: 'field' }, h('label', {}, 'Client id'), clientId, h('small', {}, 'Used for per-client limits')))),
+            h('div', { class: 'field' }, h('label', {}, 'Depends on'), dependsOn))),
     errors,
     h('div', { class: 'row' }, h('span', { class: 'spacer' }), submitButton));
 
     root.replaceChildren(h('div', { class: 'page-head' }, h('h1', {}, 'Submit a job')),
-        enabled.length ? form : h('div', { class: 'card' }, 'No task types are enabled. Enable one on the Tasks page.'));
+        tasks.length ? form : h('div', { class: 'card' }, 'No task types are registered yet.'));
 }
 
 export default {

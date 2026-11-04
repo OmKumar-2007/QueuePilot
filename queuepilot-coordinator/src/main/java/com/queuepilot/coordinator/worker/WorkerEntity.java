@@ -1,9 +1,7 @@
 package com.queuepilot.coordinator.worker;
 
 import com.queuepilot.coordinator.job.JobEntity;
-import com.queuepilot.coordinator.task.ExecutorKind;
 import com.queuepilot.coordinator.task.TaskDefinitionEntity;
-import com.queuepilot.coordinator.task.TaskRegistryService;
 import com.queuepilot.core.job.WorkerStatus;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -27,44 +25,28 @@ public class WorkerEntity {
     @Enumerated(EnumType.STRING)
     private WorkerStatus status;
     private int concurrencyLimit;
-    private String capabilities;
     private String supportedTasks;
-    private String tokenHash;
     private String pendingCommand;
     private long demoPaceMs;
-    private Instant registeredAt;
     private Instant lastHeartbeatAt;
 
     protected WorkerEntity() {
     }
 
-    public WorkerEntity(String id, String name, int concurrencyLimit, Set<String> capabilities,
-                        Set<String> supportedTasks, String tokenHash, long demoPaceMs, Instant now) {
+    public WorkerEntity(String id, String name, int concurrencyLimit, Set<String> supportedTasks, long demoPaceMs,
+                        Instant now) {
         this.id = id;
         this.name = name;
         this.status = WorkerStatus.ONLINE;
         this.concurrencyLimit = concurrencyLimit;
-        this.capabilities = String.join(",", capabilities);
         this.supportedTasks = String.join(",", supportedTasks);
-        this.tokenHash = tokenHash;
         this.demoPaceMs = demoPaceMs;
-        this.registeredAt = now;
         this.lastHeartbeatAt = now;
     }
 
-    /**
-     * Capability matching (F7): the worker must advertise every capability the task requires and
-     * must have the exact task implementation (or, for container tasks, the docker capability).
-     */
+    /** A worker can run a job if it has a plugin for the job's task type. */
     public boolean canRun(JobEntity job) {
-        Set<String> mine = capabilitySet();
-        if (!mine.containsAll(job.requiredCapabilitySet())) {
-            return false;
-        }
-        if (job.getExecutorKind() == ExecutorKind.CONTAINER) {
-            return mine.contains(TaskRegistryService.DOCKER_CAPABILITY);
-        }
-        return supportedTaskSet().contains(job.taskIdentifier());
+        return supportedTaskSet().contains(job.getTaskType());
     }
 
     public void heartbeat(Instant now) {
@@ -91,10 +73,6 @@ public class WorkerEntity {
         return lastHeartbeatAt.isBefore(cutoff);
     }
 
-    public Set<String> capabilitySet() {
-        return TaskDefinitionEntity.splitCsv(capabilities);
-    }
-
     public Set<String> supportedTaskSet() {
         return TaskDefinitionEntity.splitCsv(supportedTasks);
     }
@@ -105,6 +83,5 @@ public class WorkerEntity {
     public int getConcurrencyLimit() { return concurrencyLimit; }
     public String getPendingCommand() { return pendingCommand; }
     public long getDemoPaceMs() { return demoPaceMs; }
-    public Instant getRegisteredAt() { return registeredAt; }
     public Instant getLastHeartbeatAt() { return lastHeartbeatAt; }
 }

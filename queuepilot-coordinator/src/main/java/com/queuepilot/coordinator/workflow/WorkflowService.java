@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -52,15 +51,15 @@ public class WorkflowService {
         this.clock = clock;
     }
 
-    public record StepRequest(String key, String name, String taskType, String taskVersion, Map<String, Object> input,
-                              Integer priority, Long estimatedMs, List<String> dependsOn) {
+    public record StepRequest(String key, String taskType, Map<String, Object> input, Integer priority, Long estimatedMs,
+                              List<String> dependsOn) {
     }
 
-    public record SubmitWorkflowRequest(String name, String queue, Instant deadline, List<StepRequest> steps) {
+    public record SubmitWorkflowRequest(String name, String queue, List<StepRequest> steps) {
     }
 
     @Transactional
-    public WorkflowView submit(SubmitWorkflowRequest request, String clientId) {
+    public WorkflowView submit(SubmitWorkflowRequest request) {
         List<StepRequest> steps = request.steps() == null ? List.of() : request.steps();
         List<ValidationError> errors = new ArrayList<>();
         String name = request.name() == null || request.name().isBlank() ? "workflow" : request.name().trim();
@@ -98,16 +97,15 @@ public class WorkflowService {
             throw new ValidationException(errors);
         }
 
-        WorkflowEntity workflow = workflows.save(new WorkflowEntity(UUID.randomUUID().toString(), name, clientId, clock.instant()));
+        WorkflowEntity workflow = workflows.save(new WorkflowEntity(UUID.randomUUID().toString(), name, clock.instant()));
         Map<String, String> jobIdByKey = new HashMap<>();
         for (String key : graph.topologicalOrder()) {
             StepRequest step = byKey.get(key);
             List<String> prerequisiteIds = graph.prerequisitesOf(key).stream().map(jobIdByKey::get).toList();
-            SubmitJobRequest jobRequest = new SubmitJobRequest(step.name() == null ? key : step.name(), step.taskType(),
-                    step.taskVersion(), step.input(), step.priority(), step.estimatedMs(), request.queue(), null,
-                    request.deadline(), prerequisiteIds);
+            SubmitJobRequest jobRequest = new SubmitJobRequest(step.taskType(), step.input(), step.priority(),
+                    step.estimatedMs(), request.queue(), prerequisiteIds);
             try {
-                jobIdByKey.put(key, jobService.create(jobRequest, clientId, workflow.getId(), key).getId());
+                jobIdByKey.put(key, jobService.create(jobRequest, workflow.getId(), key).getId());
             } catch (ValidationException e) {
                 throw new ValidationException(e.errors().stream()
                         .map(err -> new ValidationError("steps." + key + "." + err.field(), err.message())).toList());
@@ -142,7 +140,7 @@ public class WorkflowService {
             if (job.getState().isTerminal()) {
                 terminal++;
             }
-            nodes.add(new WorkflowView.Node(job.getId(), job.getWorkflowStep(), job.getName(), job.taskIdentifier(),
+            nodes.add(new WorkflowView.Node(job.getId(), job.getWorkflowStep(), job.getTaskType(),
                     job.getState(), job.getProgressPercent()));
             for (String prerequisite : job.getPrerequisiteIds()) {
                 if (memberIds.contains(prerequisite)) {
@@ -151,7 +149,7 @@ public class WorkflowService {
             }
         }
         int percent = members.isEmpty() ? 0 : 100 * terminal / members.size();
-        return new WorkflowView(workflow.getId(), workflow.getName(), workflow.getClientId(), workflow.getCreatedAt(),
+        return new WorkflowView(workflow.getId(), workflow.getName(), workflow.getCreatedAt(),
                 WorkflowView.overallState(counts, members.size()), percent, counts, nodes, edges);
     }
 }

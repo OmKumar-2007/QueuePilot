@@ -34,19 +34,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end: a real coordinator on a random port, four real worker runtimes talking to it over
- * HTTP, real task plugins, the real recovery monitor and real time. Admin endpoints are used
- * without a password (the default for the local demo).
+ * HTTP, real task plugins, the real recovery monitor and real time.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.datasource.url=jdbc:h2:mem:qp-e2e;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1",
         "queuepilot.recovery-enabled=true",
         "queuepilot.recovery-interval-ms=200",
-        "queuepilot.admin-auth-enabled=false",
         "queuepilot.heartbeat-interval-ms=300",
         "queuepilot.lease-duration-ms=2000",
-        "queuepilot.worker-timeout-ms=2000",
-        "queuepilot.claim-poll-ms=100",
-        "queuepilot.retry-base-delay-ms=200"})
+        "queuepilot.worker-timeout-ms=2000"})
 @ActiveProfiles("test")
 class RealWorkersEndToEndTest {
 
@@ -75,10 +71,10 @@ class RealWorkersEndToEndTest {
     }
 
     private WorkerRuntime startWorker(String name, long paceMs, long freezeMs) throws Exception {
-        WorkerConfig config = new WorkerConfig("http://127.0.0.1:" + port, name, 1, List.of("cpu", "io", "text"),
-                "test-secret", null, workDir.resolve(name), false, "docker", paceMs, freezeMs);
+        WorkerConfig config = new WorkerConfig("http://127.0.0.1:" + port, name, 1, null, workDir.resolve(name),
+                paceMs, freezeMs);
         WorkerRuntime runtime = new WorkerRuntime(config, new HttpCoordinatorClient(config.coordinatorUrl()),
-                TaskExecutorRegistry.load(null), null);
+                TaskExecutorRegistry.load(null));
         runtime.start();
         workers.add(runtime);
         return runtime;
@@ -171,7 +167,7 @@ class RealWorkersEndToEndTest {
 
         JsonNode done = await(() -> jobInState(id, "SUCCEEDED"), Duration.ofSeconds(30), "job after interrupt");
         JsonNode attempts = call("GET", "/api/jobs/" + id + "/history", null).get("attempts");
-        assertThat(attempts.get(0).get("errorCode").asText()).isEqualTo("INTERRUPTED");
+        assertThat(attempts.get(0).get("error").asText()).startsWith("INTERRUPTED");
         assertThat(done.get("attemptsUsed").asInt()).isEqualTo(2);
     }
 

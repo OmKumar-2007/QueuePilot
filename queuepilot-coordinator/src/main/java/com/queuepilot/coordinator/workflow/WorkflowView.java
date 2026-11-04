@@ -9,7 +9,6 @@ import java.util.Map;
 /** A workflow with its graph (nodes = jobs, edges = prerequisite -> dependant) and aggregate progress. */
 public record WorkflowView(String id,
                            String name,
-                           String clientId,
                            Instant createdAt,
                            String state,
                            int percentComplete,
@@ -17,7 +16,7 @@ public record WorkflowView(String id,
                            List<Node> nodes,
                            List<Edge> edges) {
 
-    public record Node(String jobId, String step, String name, String task, JobState state, int progressPercent) {
+    public record Node(String jobId, String step, String task, JobState state, int progressPercent) {
     }
 
     public record Edge(String from, String to) {

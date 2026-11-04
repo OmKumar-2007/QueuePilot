@@ -51,34 +51,6 @@ public final class Errors {
         }
     }
 
-    public static class QuotaExceededException extends ApiException {
-        public QuotaExceededException(String message) {
-            super(message);
-        }
-
-        public HttpStatus status() {
-            return HttpStatus.TOO_MANY_REQUESTS;
-        }
-
-        public String code() {
-            return "QUOTA_EXCEEDED";
-        }
-    }
-
-    public static class ForbiddenException extends ApiException {
-        public ForbiddenException(String message) {
-            super(message);
-        }
-
-        public HttpStatus status() {
-            return HttpStatus.FORBIDDEN;
-        }
-
-        public String code() {
-            return "FORBIDDEN";
-        }
-    }
-
     public static class ValidationException extends ApiException {
         private final List<ValidationError> errors;
 

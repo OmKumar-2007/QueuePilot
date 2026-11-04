@@ -1,9 +1,10 @@
 package com.queuepilot.coordinator.artifact;
 
-import com.queuepilot.coordinator.config.QueuePilotProperties;
 import com.queuepilot.coordinator.error.Errors.NotFoundException;
 import com.queuepilot.coordinator.error.Errors.ValidationException;
 import com.queuepilot.core.schema.ValidationError;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,39 +22,43 @@ import java.util.UUID;
 @Service
 public class ArtifactService {
 
+    private static final Logger log = LoggerFactory.getLogger(ArtifactService.class);
+
+    /** Largest file accepted (50 MB). */
+    static final long MAX_ARTIFACT_BYTES = 50L * 1024 * 1024;
+
     private final ArtifactRepository repository;
     private final ArtifactStorage storage;
-    private final QueuePilotProperties properties;
     private final Clock clock;
 
-    public ArtifactService(ArtifactRepository repository, ArtifactStorage storage, QueuePilotProperties properties, Clock clock) {
+    public ArtifactService(ArtifactRepository repository, ArtifactStorage storage, Clock clock) {
         this.repository = repository;
         this.storage = storage;
-        this.properties = properties;
         this.clock = clock;
     }
 
     @Transactional
-    public ArtifactEntity uploadInput(MultipartFile file, String clientId) {
-        return save(file, null, ArtifactEntity.ROLE_INPUT, clientId);
+    public ArtifactEntity uploadInput(MultipartFile file) {
+        return save(file, null);
     }
 
     @Transactional
     public ArtifactEntity uploadOutput(MultipartFile file, String jobId) {
-        return save(file, jobId, ArtifactEntity.ROLE_OUTPUT, null);
+        return save(file, jobId);
     }
 
-    private ArtifactEntity save(MultipartFile file, String jobId, String role, String clientId) {
+    private ArtifactEntity save(MultipartFile file, String jobId) {
         if (file == null || file.isEmpty()) {
             throw new ValidationException("file", "is required and must not be empty");
         }
         String name = sanitizeName(file.getOriginalFilename());
         String contentType = file.getContentType() == null ? "application/octet-stream" : file.getContentType();
         try (InputStream in = file.getInputStream()) {
-            ArtifactStorage.StoredFile stored = storage.store(in, properties.maxArtifactBytes());
+            String id = UUID.randomUUID().toString();
+            ArtifactStorage.StoredFile stored = storage.store(id, in, MAX_ARTIFACT_BYTES);
             Instant now = clock.instant();
-            return repository.save(new ArtifactEntity(UUID.randomUUID().toString(), jobId, role, name,
-                    contentType.length() > 100 ? "application/octet-stream" : contentType, stored, clientId, now));
+            return repository.save(new ArtifactEntity(id, jobId, name,
+                    contentType.length() > 100 ? "application/octet-stream" : contentType, stored, now));
         } catch (ArtifactStorage.TooLargeException e) {
             throw new ValidationException("file", e.getMessage());
         } catch (IOException e) {
@@ -68,7 +73,7 @@ public class ArtifactService {
 
     public InputStream open(ArtifactEntity artifact) {
         try {
-            return storage.open(artifact.getStorageKey());
+            return storage.open(artifact.getId());
         } catch (IOException e) {
             throw new NotFoundException("Artifact content is missing");
         }
@@ -80,7 +85,7 @@ public class ArtifactService {
         List<ValidationError> errors = new ArrayList<>();
         for (String id : ids) {
             ArtifactEntity artifact = repository.findById(id).orElse(null);
-            if (artifact == null || !ArtifactEntity.ROLE_INPUT.equals(artifact.getRole())) {
+            if (artifact == null) {
                 errors.add(new ValidationError("input", "artifact " + id + " does not exist"));
             } else if (artifact.getJobId() != null) {
                 errors.add(new ValidationError("input", "artifact " + id + " is already used by job " + artifact.getJobId()));
@@ -101,9 +106,15 @@ public class ArtifactService {
         return repository.findByJobId(jobId);
     }
 
-    @Transactional(readOnly = true)
-    public List<String> inputIdsForJob(String jobId) {
-        return repository.findByJobIdAndRole(jobId, ArtifactEntity.ROLE_INPUT).stream().map(ArtifactEntity::getId).toList();
+    /** Best effort: a file that cannot be deleted is only wasted disk space, so it must not fail the caller. */
+    public void deleteFiles(List<String> ids) {
+        for (String id : ids) {
+            try {
+                storage.delete(id);
+            } catch (IOException e) {
+                log.warn("Could not delete artifact file {}: {}", id, e.getMessage());
+            }
+        }
     }
 
     private static String sanitizeName(String original) {

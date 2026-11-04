@@ -60,19 +60,18 @@ class PostgresIntegrationTest {
 
         JsonNode worker = mapper.readTree(mvc.perform(post("/api/worker/register").contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("name", "pg-worker", "concurrencyLimit", 1,
-                                "capabilities", List.of("cpu"), "supportedTasks", List.of("sorting@1.0.0"), "enrollSecret", "test-secret"))))
+                                "supportedTasks", List.of("sorting")))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
-        String bearer = "Bearer " + worker.get("workerToken").asText();
+        String workerId = worker.get("workerId").asText();
 
-        JsonNode assignment = mapper.readTree(mvc.perform(post("/api/worker/claim").header("Authorization", bearer)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"freeSlots\":1}"))
+        JsonNode assignment = mapper.readTree(mvc.perform(post("/api/worker/claim").header("X-Worker-Id", workerId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertThat(assignment.get("jobId").asText()).isEqualTo(job.get("id").asText());
 
         mvc.perform(post("/api/worker/attempts/" + assignment.get("attemptId").asText() + "/complete")
-                .header("Authorization", bearer).contentType(MediaType.APPLICATION_JSON)
-                .content(mapper.writeValueAsString(Map.of("fencingToken", assignment.get("fencingToken").asText(),
-                        "output", Map.of("sorted", List.of(1, 2, 3)))))).andExpect(status().isOk());
+                .header("X-Worker-Id", workerId).contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(Map.of("output", Map.of("sorted", List.of(1, 2, 3)))))).andExpect(status().isOk());
 
         JsonNode done = mapper.readTree(mvc.perform(get("/api/jobs/" + job.get("id").asText()))
                 .andReturn().getResponse().getContentAsString());

@@ -9,5 +9,7 @@ public interface SystemEventRepository extends JpaRepository<SystemEventEntity, 
 
     List<SystemEventEntity> findAllByOrderByIdDesc(Pageable pageable);
 
+    List<SystemEventEntity> findByIdLessThanOrderByIdDesc(long id, Pageable pageable);
+
     List<SystemEventEntity> findByJobIdOrderByIdAsc(String jobId);
 }

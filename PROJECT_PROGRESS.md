@@ -27,6 +27,19 @@
 - Dashboard redesigned around a single Live page; controls are no longer re-created on each refresh (clicks were being lost).
 - Ideas taken from the original prototype's tests (github.com/SubhamJM/QueuePilot): readable `@DisplayName`s, a 4-worker concurrent run, crash/recovery on a different worker. They are now real end-to-end tests over HTTP (`RealWorkersEndToEndTest`) instead of in-memory threads.
 
+## Iteration 3 (2026-11-04): simpler classes
+
+Fields and features not needed for a course project were removed to keep the code easy to follow:
+
+- **Security**: Spring Security, admin login, worker enrollment secret and bearer tokens, fencing tokens. Workers send their id in `X-Worker-Id`; stale results are still rejected because only the job's current attempt may update it.
+- **Task versions, enable/disable, capabilities, resources, output schema, Docker/container tasks** (Phase 9 code deleted).
+- **Clients and quotas, deadlines, scheduled start (`SCHEDULED` state), job names** (jobs show `taskType #id`).
+- Error code + message merged into one `error` field on jobs and attempts; artifact `role`, `storageKey` and `clientId` removed; most settings became constants.
+- New built-in task: **Custom JavaScript** (upload a `.js` file defining `run(input, progress)`).
+
+The database schema was rewritten in `V1__init.sql` (V2 merged into it): delete `data/db` before starting an old installation.
+`docs/architecture`, `docs/design` and the ADRs still describe the earlier design in places.
+
 ## Verification status (2026-11-03)
 
 - `./mvnw verify`: 99 tests, 0 failures; container isolation tests do not run (Docker absent). See `docs/testing/testing-strategy.md` for the requirement-to-test map.

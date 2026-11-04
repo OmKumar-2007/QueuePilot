@@ -1,0 +1,26 @@
+{
+  "taskType": "javascript",
+  "displayName": "Custom JavaScript",
+  "description": "Runs your own .js file with Node.js. The file must define function run(input, progress) and return the result.",
+  "inputSchema": {
+    "fields": [
+      {
+        "name": "script",
+        "type": "FILE",
+        "required": true,
+        "description": "A .js file that defines function run(input, progress)"
+      },
+      {
+        "name": "input",
+        "type": "STRING",
+        "required": false,
+        "maxLength": 10000,
+        "description": "JSON passed to run() as 'input', e.g. {\"n\": 10} (default {})"
+      }
+    ]
+  },
+  "timeoutSeconds": 120,
+  "maxRetries": 0,
+  "defaultPriority": 5,
+  "defaultEstimatedMs": 3000
+}

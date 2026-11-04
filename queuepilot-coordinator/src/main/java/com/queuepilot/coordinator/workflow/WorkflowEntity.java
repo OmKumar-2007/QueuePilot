@@ -14,21 +14,18 @@ public class WorkflowEntity {
     @Id
     private String id;
     private String name;
-    private String clientId;
     private Instant createdAt;
 
     protected WorkflowEntity() {
     }
 
-    public WorkflowEntity(String id, String name, String clientId, Instant createdAt) {
+    public WorkflowEntity(String id, String name, Instant createdAt) {
         this.id = id;
         this.name = name;
-        this.clientId = clientId;
         this.createdAt = createdAt;
     }
 
     public String getId() { return id; }
     public String getName() { return name; }
-    public String getClientId() { return clientId; }
     public Instant getCreatedAt() { return createdAt; }
 }

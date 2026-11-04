@@ -10,8 +10,6 @@ import com.queuepilot.coordinator.event.EventType;
 import com.queuepilot.coordinator.job.DependencyService;
 import com.queuepilot.coordinator.job.JobEntity;
 import com.queuepilot.coordinator.job.JobRepository;
-import com.queuepilot.coordinator.security.TokenHasher;
-import com.queuepilot.coordinator.task.ExecutorKind;
 import com.queuepilot.coordinator.task.TaskDefinitionEntity;
 import com.queuepilot.coordinator.task.TaskRegistryService;
 import com.queuepilot.coordinator.worker.WorkerEntity;
@@ -22,7 +20,6 @@ import com.queuepilot.core.job.RetryPolicy;
 import com.queuepilot.core.job.WorkerStatus;
 import com.queuepilot.core.protocol.WorkerProtocol;
 import com.queuepilot.core.protocol.WorkerProtocol.Assignment;
-import com.queuepilot.core.protocol.WorkerProtocol.AttemptRef;
 import com.queuepilot.core.protocol.WorkerProtocol.CompletionReport;
 import com.queuepilot.core.protocol.WorkerProtocol.FailureReport;
 import com.queuepilot.core.protocol.WorkerProtocol.HeartbeatResponse;
@@ -36,7 +33,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,8 +40,8 @@ import java.util.UUID;
 
 /**
  * Everything that happens to an attempt after a job is claimed: creation, lease renewal, progress,
- * completion, failure, expiry and timeout. Every worker update is <b>fenced</b>: it is applied only
- * if it names the job's current attempt, comes from that attempt's worker and carries its token.
+ * completion, failure, expiry and timeout. Every worker update is checked: it is applied only if
+ * it names the job's current attempt and comes from that attempt's worker.
  */
 @Service
 public class AttemptService {
@@ -82,6 +78,9 @@ public class AttemptService {
         this.clock = clock;
     }
 
+    /** Larger outputs must be uploaded as file artifacts. */
+    static final int MAX_OUTPUT_BYTES = 256 * 1024;
+
     private Duration lease() {
         return Duration.ofMillis(properties.leaseDurationMs());
     }
@@ -97,45 +96,42 @@ public class AttemptService {
             return Optional.empty();
         }
         Instant now = clock.instant();
-        String token = TokenHasher.newToken();
         AttemptEntity attempt = new AttemptEntity(UUID.randomUUID().toString(), jobId, workerId,
-                job.getAttemptsUsed() + 1, token, now, lease());
+                job.getAttemptsUsed() + 1, now, lease());
         job.start(attempt.getId(), workerId, now);
         attempts.save(attempt);
         events.record(EventType.JOB_CLAIMED, jobId, workerId, attempt.getId(),
-                "Job " + job.getName() + " attempt " + attempt.getAttemptNumber() + " assigned to worker " + workerId);
+                "Job " + job.label() + " attempt " + attempt.getAttemptNumber() + " assigned to worker " + workerId);
 
-        TaskDefinitionEntity task = registry.get(job.getTaskDefinitionId());
-        WorkerProtocol.ContainerSpec container = null;
-        if (task.getExecutorKind() == ExecutorKind.CONTAINER) {
-            List<String> command = Arrays.asList(json.read(task.getContainerCommand(), String[].class));
-            container = new WorkerProtocol.ContainerSpec(task.getContainerImage(), command, task.getCpuMillis(), task.getMemoryMb());
-        }
-        return Optional.of(new Assignment(attempt.getId(), token, attempt.getAttemptNumber(), jobId,
-                job.getTaskType(), job.getTaskVersion(), task.getExecutorKind().name(), json.readMap(job.getInputJson()),
-                artifacts.inputIdsForJob(jobId), properties.leaseDurationMs(), job.getTimeoutSeconds(), container));
+        return Optional.of(new Assignment(attempt.getId(), attempt.getAttemptNumber(), jobId, job.getTaskType(),
+                json.readMap(job.getInputJson()), task(job).getTimeoutSeconds()));
+    }
+
+    /** The task definition of a job; timeouts and retry limits are read from it. */
+    private TaskDefinitionEntity task(JobEntity job) {
+        return registry.find(job.getTaskType()).orElseThrow();
     }
 
     /** Renews the leases of the worker's attempts that are still current; tells it which ones to stop. */
     @Transactional
-    public HeartbeatResponse heartbeat(String workerId, List<AttemptRef> refs) {
-        WorkerEntity worker = workers.findById(workerId).orElseThrow(() -> new StaleAttemptException("Unknown worker"));
+    public HeartbeatResponse heartbeat(String workerId, List<String> attemptIds) {
+        WorkerEntity worker = workers.findById(workerId).orElse(null);
         List<String> renewed = new ArrayList<>();
         List<String> revoked = new ArrayList<>();
-        List<AttemptRef> active = refs == null ? List.of() : refs;
-        if (worker.getStatus() == WorkerStatus.OFFLINE) {
-            active.forEach(ref -> revoked.add(ref.attemptId()));
+        List<String> active = attemptIds == null ? List.of() : attemptIds;
+        if (worker == null || worker.getStatus() == WorkerStatus.OFFLINE) {
+            revoked.addAll(active);
             return new HeartbeatResponse(renewed, revoked, WorkerProtocol.COMMAND_REREGISTER);
         }
         Instant now = clock.instant();
         worker.heartbeat(now);
-        for (AttemptRef ref : active) {
-            AttemptEntity attempt = attempts.findById(ref.attemptId()).orElse(null);
-            if (attempt != null && attempt.accepts(workerId, ref.fencingToken())) {
+        for (String attemptId : active) {
+            AttemptEntity attempt = attempts.findById(attemptId).orElse(null);
+            if (attempt != null && attempt.accepts(workerId)) {
                 attempt.renewLease(now, lease());
-                renewed.add(attempt.getId());
+                renewed.add(attemptId);
             } else {
-                revoked.add(ref.attemptId());
+                revoked.add(attemptId);
             }
         }
         return new HeartbeatResponse(renewed, revoked, worker.takeCommand());
@@ -143,7 +139,7 @@ public class AttemptService {
 
     @Transactional
     public UpdateResult progress(String workerId, String attemptId, ProgressReport report) {
-        AttemptEntity attempt = currentAttempt(workerId, attemptId, report.fencingToken());
+        AttemptEntity attempt = currentAttempt(workerId, attemptId);
         if (attempt == null) {
             return UpdateResult.STALE;
         }
@@ -156,38 +152,38 @@ public class AttemptService {
 
     @Transactional
     public UpdateResult complete(String workerId, String attemptId, CompletionReport report) {
-        AttemptEntity attempt = currentAttempt(workerId, attemptId, report.fencingToken());
+        AttemptEntity attempt = currentAttempt(workerId, attemptId);
         if (attempt == null) {
             return UpdateResult.STALE;
         }
         JobEntity job = jobs.findById(attempt.getJobId()).orElseThrow();
         Instant now = clock.instant();
         String outputJson = json.write(report.output() == null ? Map.of() : report.output());
-        if (outputJson.getBytes(StandardCharsets.UTF_8).length > properties.maxOutputBytes()) {
+        if (outputJson.getBytes(StandardCharsets.UTF_8).length > MAX_OUTPUT_BYTES) {
             endAttempt(attempt, job, AttemptState.FAILED, "OUTPUT_TOO_LARGE",
-                    "Output exceeds " + properties.maxOutputBytes() + " bytes", false, now);
+                    "Output exceeds " + MAX_OUTPUT_BYTES + " bytes", false, now);
             return UpdateResult.ACCEPTED;
         }
         List<String> outputIds = report.outputArtifactIds() == null ? List.of() : report.outputArtifactIds();
         for (String id : outputIds) {
             ArtifactEntity artifact = artifacts.get(id);
-            if (!job.getId().equals(artifact.getJobId()) || !ArtifactEntity.ROLE_OUTPUT.equals(artifact.getRole())) {
+            if (!job.getId().equals(artifact.getJobId())) {
                 endAttempt(attempt, job, AttemptState.FAILED, "INVALID_OUTPUT_ARTIFACT",
                         "Artifact " + id + " is not an output of this job", false, now);
                 return UpdateResult.ACCEPTED;
             }
         }
-        attempt.finish(AttemptState.SUCCEEDED, null, null, now);
+        attempt.finish(AttemptState.SUCCEEDED, null, now);
         job.succeed(outputJson, String.join(",", outputIds), now);
         events.record(EventType.JOB_SUCCEEDED, job.getId(), workerId, attemptId,
-                "Job " + job.getName() + " succeeded on attempt " + attempt.getAttemptNumber());
+                "Job " + job.label() + " succeeded on attempt " + attempt.getAttemptNumber());
         dependencies.onJobFinished(job, now);
         return UpdateResult.ACCEPTED;
     }
 
     @Transactional
     public UpdateResult fail(String workerId, String attemptId, FailureReport report) {
-        AttemptEntity attempt = currentAttempt(workerId, attemptId, report.fencingToken());
+        AttemptEntity attempt = currentAttempt(workerId, attemptId);
         if (attempt == null) {
             return UpdateResult.STALE;
         }
@@ -208,7 +204,7 @@ public class AttemptService {
         }
         JobEntity job = jobs.findById(attempt.getJobId()).orElseThrow();
         events.record(EventType.LEASE_EXPIRED, job.getId(), attempt.getWorkerId(), attemptId,
-                "Lease of attempt " + attempt.getAttemptNumber() + " for " + job.getName() + " expired");
+                "Lease of attempt " + attempt.getAttemptNumber() + " for " + job.label() + " expired");
         endAttempt(attempt, job, AttemptState.LEASE_EXPIRED, "LEASE_EXPIRED",
                 "No heartbeat from worker " + attempt.getWorkerId() + " before the lease ended", true, now);
     }
@@ -222,11 +218,12 @@ public class AttemptService {
         }
         JobEntity job = jobs.findById(attempt.getJobId()).orElseThrow();
         Instant now = clock.instant();
-        if (attempt.exceededTimeout(now, job.getTimeoutSeconds())) {
+        int timeoutSeconds = task(job).getTimeoutSeconds();
+        if (attempt.exceededTimeout(now, timeoutSeconds)) {
             events.record(EventType.ATTEMPT_TIMED_OUT, job.getId(), attempt.getWorkerId(), attemptId,
-                    "Attempt " + attempt.getAttemptNumber() + " of " + job.getName() + " exceeded " + job.getTimeoutSeconds() + "s");
+                    "Attempt " + attempt.getAttemptNumber() + " of " + job.label() + " exceeded " + timeoutSeconds + "s");
             endAttempt(attempt, job, AttemptState.TIMED_OUT, "TIMEOUT",
-                    "Exceeded the task timeout of " + job.getTimeoutSeconds() + "s", true, now);
+                    "Exceeded the task timeout of " + timeoutSeconds + "s", true, now);
         }
     }
 
@@ -246,30 +243,33 @@ public class AttemptService {
      */
     private void endAttempt(AttemptEntity attempt, JobEntity job, AttemptState outcome, String code, String message,
                             boolean retryable, Instant now) {
-        attempt.finish(outcome, code, message, now);
+        String error = message == null || message.isBlank() ? code : code + ": " + message;
+        error = error.length() > 2000 ? error.substring(0, 2000) : error;
+        attempt.finish(outcome, error, now);
         if (!job.isCurrentAttempt(attempt.getId())) {
             return;
         }
-        if (retryable && job.canRetry()) {
+        int maxRetries = task(job).getMaxRetries();
+        if (retryable && job.canRetry(maxRetries)) {
             Duration delay = retryPolicy.delayBefore(job.getAttemptsUsed());
-            job.retryLater(now.plus(delay), code, message);
+            job.retryLater(now.plus(delay), error, maxRetries);
             events.record(EventType.JOB_RETRY_SCHEDULED, job.getId(), attempt.getWorkerId(), attempt.getId(),
-                    "Job " + job.getName() + " attempt " + attempt.getAttemptNumber() + " ended " + outcome
-                            + " (" + code + "); retry " + job.getAttemptsUsed() + "/" + job.getMaxRetries()
+                    "Job " + job.label() + " attempt " + attempt.getAttemptNumber() + " ended " + outcome
+                            + " (" + code + "); retry " + job.getAttemptsUsed() + "/" + maxRetries
                             + " in " + delay.toMillis() + " ms");
         } else {
-            job.fail(code, message, now);
+            job.fail(error, now);
             events.record(EventType.JOB_FAILED, job.getId(), attempt.getWorkerId(), attempt.getId(),
-                    "Job " + job.getName() + " failed: " + code + (retryable ? " (retries exhausted)" : " (not retryable)"));
+                    "Job " + job.label() + " failed: " + code + (retryable ? " (retries exhausted)" : " (not retryable)"));
             dependencies.onJobFinished(job, now);
         }
     }
 
-    /** Returns the attempt only if it is the job's current attempt and the caller proves ownership. */
-    private AttemptEntity currentAttempt(String workerId, String attemptId, String token) {
+    /** Returns the attempt only if it is the job's current attempt and belongs to this worker. */
+    private AttemptEntity currentAttempt(String workerId, String attemptId) {
         AttemptEntity attempt = attempts.findById(attemptId).orElse(null);
         JobEntity job = attempt == null ? null : jobs.findById(attempt.getJobId()).orElse(null);
-        if (attempt == null || job == null || !attempt.accepts(workerId, token) || !job.isCurrentAttempt(attemptId)) {
+        if (attempt == null || job == null || !attempt.accepts(workerId) || !job.isCurrentAttempt(attemptId)) {
             events.record(EventType.STALE_UPDATE_REJECTED, job == null ? null : job.getId(), workerId, attemptId,
                     "Rejected update for attempt " + attemptId + " from worker " + workerId + ": not the current attempt");
             return null;
@@ -277,26 +277,26 @@ public class AttemptService {
         return attempt;
     }
 
-    /** Output upload from a worker, fenced like every other attempt update. */
+    /** Output upload from a worker, checked like every other attempt update. */
     @Transactional
-    public ArtifactEntity uploadOutput(String workerId, String attemptId, String token, MultipartFile file) {
-        AttemptEntity attempt = currentAttempt(workerId, attemptId, token);
+    public ArtifactEntity uploadOutput(String workerId, String attemptId, MultipartFile file) {
+        AttemptEntity attempt = currentAttempt(workerId, attemptId);
         if (attempt == null) {
             throw new StaleAttemptException("Attempt " + attemptId + " is not current");
         }
         return artifacts.uploadOutput(file, attempt.getJobId());
     }
 
-    /** Input download for a worker: only input artifacts of the attempt's own job. */
+    /** File download for a worker: only files of the attempt's own job. */
     @Transactional(readOnly = true)
-    public ArtifactEntity inputForAttempt(String workerId, String attemptId, String token, String artifactId) {
+    public ArtifactEntity inputForAttempt(String workerId, String attemptId, String artifactId) {
         AttemptEntity attempt = attempts.findById(attemptId).orElse(null);
-        if (attempt == null || !attempt.accepts(workerId, token)) {
+        if (attempt == null || !attempt.accepts(workerId)) {
             throw new StaleAttemptException("Attempt " + attemptId + " is not current");
         }
         ArtifactEntity artifact = artifacts.get(artifactId);
-        if (!attempt.getJobId().equals(artifact.getJobId()) || !ArtifactEntity.ROLE_INPUT.equals(artifact.getRole())) {
-            throw new StaleAttemptException("Artifact " + artifactId + " is not an input of this attempt's job");
+        if (!attempt.getJobId().equals(artifact.getJobId())) {
+            throw new StaleAttemptException("Artifact " + artifactId + " does not belong to this attempt's job");
         }
         return artifact;
     }

@@ -20,20 +20,17 @@ public class SchedulerSettingsEntity {
     private PolicyType activePolicy;
     private int agingIntervalSeconds;
     private int agingStep;
-    private int maxActiveJobsPerClient;
 
     protected SchedulerSettingsEntity() {
     }
 
-    public void update(PolicyType policy, int agingIntervalSeconds, int agingStep, int maxActiveJobsPerClient) {
+    public void update(PolicyType policy, int agingIntervalSeconds, int agingStep) {
         this.activePolicy = policy;
         this.agingIntervalSeconds = agingIntervalSeconds;
         this.agingStep = agingStep;
-        this.maxActiveJobsPerClient = maxActiveJobsPerClient;
     }
 
     public PolicyType getActivePolicy() { return activePolicy; }
     public int getAgingIntervalSeconds() { return agingIntervalSeconds; }
     public int getAgingStep() { return agingStep; }
-    public int getMaxActiveJobsPerClient() { return maxActiveJobsPerClient; }
 }

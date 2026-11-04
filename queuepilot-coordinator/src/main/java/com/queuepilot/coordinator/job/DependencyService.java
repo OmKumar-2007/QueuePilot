@@ -46,10 +46,10 @@ public class DependencyService {
         for (JobEntity dependant : jobs.findDependants(job.getId())) {
             if (job.getState() == JobState.SUCCEEDED) {
                 releaseIfReady(dependant, now);
-            } else if (dependant.getState() == JobState.BLOCKED || dependant.getState() == JobState.SCHEDULED) {
-                dependant.skip("Prerequisite " + job.getName() + " (" + job.getId() + ") ended " + job.getState(), now);
+            } else if (dependant.getState() == JobState.BLOCKED) {
+                dependant.skip("Prerequisite " + job.label() + " ended " + job.getState(), now);
                 events.record(EventType.JOB_SKIPPED, dependant.getId(), null, null,
-                        "Job " + dependant.getName() + " skipped because prerequisite " + job.getName() + " ended " + job.getState());
+                        "Job " + dependant.label() + " skipped because prerequisite " + job.label() + " ended " + job.getState());
                 onJobFinished(dependant, now);
             }
         }
@@ -57,12 +57,12 @@ public class DependencyService {
 
     private void releaseIfReady(JobEntity dependant, Instant now) {
         if (dependant.getState() != JobState.BLOCKED) {
-            return; // SCHEDULED jobs are released by the recovery monitor when their start time comes
+            return;
         }
         if (readinessOf(dependant.getPrerequisiteIds()) == Readiness.READY) {
             dependant.release(now);
             events.record(EventType.JOB_RELEASED, dependant.getId(), null, null,
-                    "Job " + dependant.getName() + " unblocked: all prerequisites succeeded");
+                    "Job " + dependant.label() + " unblocked: all prerequisites succeeded");
         }
     }
 }

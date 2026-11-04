@@ -14,7 +14,7 @@ import java.io.InputStream;
 
 /**
  * Registers the manifests of the built-in tasks at startup (copied into {@code seed-tasks/} by the
- * Maven build). Existing versions are left untouched, so restarts are harmless.
+ * Maven build). Task types that already exist are left untouched, so restarts are harmless.
  */
 @Component
 public class SeedTaskLoader implements ApplicationRunner {
@@ -35,8 +35,8 @@ public class SeedTaskLoader implements ApplicationRunner {
         for (Resource resource : resources) {
             try (InputStream in = resource.getInputStream()) {
                 TaskManifest manifest = objectMapper.readValue(in, TaskManifest.class);
-                if (registry.find(manifest.taskType(), manifest.version()).isEmpty()) {
-                    registry.register(manifest, true);
+                if (registry.find(manifest.taskType()).isEmpty()) {
+                    registry.register(manifest);
                 }
             } catch (RuntimeException e) {
                 log.error("Could not seed task manifest {}: {}", resource.getFilename(), e.getMessage());

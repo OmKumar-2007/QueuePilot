@@ -26,7 +26,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -44,7 +43,7 @@ public abstract class CoordinatorTestBase {
 
     protected static final Instant T0 = Instant.parse("2026-03-01T10:00:00Z");
     protected static final List<String> ALL_BUILTINS =
-            List.of("sorting@1.0.0", "text-analysis@1.0.0", "monte-carlo-pi@1.0.0", "file-checksum@1.0.0");
+            List.of("sorting", "text-analysis", "monte-carlo-pi", "file-checksum", "javascript");
 
     @TestConfiguration
     static class ClockConfig {
@@ -69,9 +68,8 @@ public abstract class CoordinatorTestBase {
                 "worker", "benchmark_report")) {
             jdbc.update("delete from " + table);
         }
-        jdbc.update("delete from task_definition where task_type not in ('sorting','text-analysis','monte-carlo-pi','file-checksum')");
-        jdbc.update("update task_definition set enabled = true");
-        jdbc.update("update scheduler_settings set active_policy='FCFS', aging_interval_seconds=5, aging_step=1, max_active_jobs_per_client=500");
+        jdbc.update("delete from task_definition where task_type not in ('sorting','text-analysis','monte-carlo-pi','file-checksum','javascript')");
+        jdbc.update("update scheduler_settings set active_policy='FCFS', aging_interval_seconds=5, aging_step=1");
         schedulerSettings.reload();
         queueRotation.markServed(null);
         clock.set(T0);
@@ -92,18 +90,13 @@ public abstract class CoordinatorTestBase {
         return mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(json(body)));
     }
 
-    protected MockHttpServletRequestBuilder asAdmin(MockHttpServletRequestBuilder request) {
-        return request.with(httpBasic("admin", "test-admin"));
-    }
-
     protected ResultActions adminPost(String path, Object body) throws Exception {
-        return mvc.perform(asAdmin(post(path)).contentType(MediaType.APPLICATION_JSON).content(json(body)));
+        return postJson(path, body);
     }
 
-    protected void setScheduler(String policy, int maxActivePerClient) throws Exception {
-        mvc.perform(asAdmin(put("/api/admin/scheduler")).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("activePolicy", policy, "agingIntervalSeconds", 5, "agingStep", 1,
-                                "maxActiveJobsPerClient", maxActivePerClient))))
+    protected void setScheduler(String policy) throws Exception {
+        mvc.perform(put("/api/admin/scheduler").contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("activePolicy", policy, "agingIntervalSeconds", 5, "agingStep", 1))))
                 .andExpect(status().isOk());
     }
 
@@ -134,28 +127,28 @@ public abstract class CoordinatorTestBase {
 
     // ---------- worker helpers ----------
 
-    protected record Worker(String id, String token) {
+    protected record Worker(String id) {
     }
 
-    protected Worker registerWorker(String name, int slots, List<String> capabilities, List<String> tasks) throws Exception {
+    protected Worker registerWorker(String name, int slots, List<String> tasks) throws Exception {
         JsonNode response = body(postJson("/api/worker/register", Map.of("name", name, "concurrencyLimit", slots,
-                "capabilities", capabilities, "supportedTasks", tasks, "enrollSecret", "test-secret"))
+                "supportedTasks", tasks))
                 .andExpect(status().isCreated()).andReturn());
-        return new Worker(response.get("workerId").asText(), response.get("workerToken").asText());
+        return new Worker(response.get("workerId").asText());
     }
 
     protected Worker generalWorker(String name) throws Exception {
-        return registerWorker(name, 4, List.of("cpu", "io", "text"), ALL_BUILTINS);
+        return registerWorker(name, 4, ALL_BUILTINS);
     }
 
     protected ResultActions workerPost(Worker worker, String path, Object body) throws Exception {
-        return mvc.perform(post("/api/worker" + path).header("Authorization", "Bearer " + worker.token())
+        return mvc.perform(post("/api/worker" + path).header("X-Worker-Id", worker.id())
                 .contentType(MediaType.APPLICATION_JSON).content(json(body)));
     }
 
     /** Returns the assignment, or null when the coordinator answered 204 (nothing to do). */
     protected JsonNode claim(Worker worker) throws Exception {
-        MvcResult result = workerPost(worker, "/claim", Map.of("freeSlots", 1)).andReturn();
+        MvcResult result = workerPost(worker, "/claim", Map.of()).andReturn();
         int code = result.getResponse().getStatus();
         if (code == 204) {
             return null;
@@ -168,20 +161,17 @@ public abstract class CoordinatorTestBase {
 
     protected ResultActions complete(Worker worker, JsonNode assignment, Map<String, Object> output) throws Exception {
         return workerPost(worker, "/attempts/" + assignment.get("attemptId").asText() + "/complete",
-                Map.of("fencingToken", assignment.get("fencingToken").asText(), "output", output, "outputArtifactIds", List.of()));
+                Map.of("output", output, "outputArtifactIds", List.of()));
     }
 
     protected ResultActions fail(Worker worker, JsonNode assignment, boolean retryable) throws Exception {
         return workerPost(worker, "/attempts/" + assignment.get("attemptId").asText() + "/fail",
-                Map.of("fencingToken", assignment.get("fencingToken").asText(), "errorCode", "BOOM",
-                        "message", "simulated failure", "retryable", retryable));
+                Map.of("errorCode", "BOOM", "message", "simulated failure", "retryable", retryable));
     }
 
     protected JsonNode heartbeat(Worker worker, JsonNode... assignments) throws Exception {
-        List<Map<String, String>> refs = java.util.Arrays.stream(assignments)
-                .map(a -> Map.of("attemptId", a.get("attemptId").asText(), "fencingToken", a.get("fencingToken").asText()))
-                .toList();
-        return body(workerPost(worker, "/heartbeat", Map.of("activeAttempts", refs)).andExpect(status().isOk()).andReturn());
+        List<String> ids = java.util.Arrays.stream(assignments).map(a -> a.get("attemptId").asText()).toList();
+        return body(workerPost(worker, "/heartbeat", Map.of("activeAttemptIds", ids)).andExpect(status().isOk()).andReturn());
     }
 
     protected void advance(Duration duration) {

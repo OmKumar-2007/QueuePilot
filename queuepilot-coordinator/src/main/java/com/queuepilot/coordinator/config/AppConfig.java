@@ -19,8 +19,9 @@ public class AppConfig {
     }
 
     @Bean
-    public RetryPolicy retryPolicy(QueuePilotProperties properties) {
-        return new RetryPolicy(Duration.ofMillis(properties.retryBaseDelayMs()), Duration.ofMillis(properties.retryMaxDelayMs()));
+    public RetryPolicy retryPolicy() {
+        // Retry n waits 2 s * 2^(n-1), at most 60 s.
+        return new RetryPolicy(Duration.ofSeconds(2), Duration.ofSeconds(60));
     }
 
     @Bean

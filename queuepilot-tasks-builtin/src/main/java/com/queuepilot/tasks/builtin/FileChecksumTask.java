@@ -23,10 +23,6 @@ public class FileChecksumTask implements TaskExecutor {
         return "file-checksum";
     }
 
-    @Override
-    public String version() {
-        return "1.0.0";
-    }
 
     @Override
     public TaskOutput execute(TaskInput input, TaskContext context) throws TaskFailure {

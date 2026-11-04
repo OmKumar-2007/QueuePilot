@@ -29,8 +29,9 @@ public class MetricsController {
     }
 
     @GetMapping("/api/events")
-    public List<EventView> events(@RequestParam(defaultValue = "100") int limit) {
-        return events.recent(limit);
+    public List<EventView> events(@RequestParam(defaultValue = "100") int limit,
+                                  @RequestParam(required = false) Long beforeId) {
+        return events.recent(limit, beforeId);
     }
 
     /** Liveness plus a real database round trip. */
@@ -46,11 +47,5 @@ public class MetricsController {
     }
 
     public record Health(String status, boolean database, String version, Instant time) {
-    }
-
-    /** Lets the dashboard check administrator credentials before using them. */
-    @GetMapping("/api/admin/session")
-    public java.util.Map<String, Object> adminSession(java.security.Principal principal) {
-        return java.util.Map.of("admin", true, "user", principal == null ? "anonymous" : principal.getName());
     }
 }

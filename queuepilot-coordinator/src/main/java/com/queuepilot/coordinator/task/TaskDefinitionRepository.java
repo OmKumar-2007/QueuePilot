@@ -7,9 +7,7 @@ import java.util.Optional;
 
 public interface TaskDefinitionRepository extends JpaRepository<TaskDefinitionEntity, String> {
 
-    Optional<TaskDefinitionEntity> findByTaskTypeAndVersion(String taskType, String version);
+    Optional<TaskDefinitionEntity> findByTaskType(String taskType);
 
-    List<TaskDefinitionEntity> findByTaskType(String taskType);
-
-    List<TaskDefinitionEntity> findAllByOrderByTaskTypeAscCreatedAtDesc();
+    List<TaskDefinitionEntity> findAllByOrderByTaskTypeAsc();
 }

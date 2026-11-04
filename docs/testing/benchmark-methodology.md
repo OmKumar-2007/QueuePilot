@@ -1,6 +1,6 @@
 # Benchmark Methodology
 
-Benchmarks live in the separate `queuepilot-benchmarks` module. The coordinator never runs them; it only stores and displays reports imported with `--publish`. Each run writes a folder under `benchmark-results/` with `config.json`, `environment.json`, `summary.json`, `raw.csv` and `summary.md`.
+Benchmarks live in the separate `queuepilot-benchmarks` module. The coordinator never runs them, and the dashboard does not show them; results are read from the output folder. `--publish` still stores a report through the coordinator API. Each run writes a folder under `benchmark-results/` with `config.json`, `environment.json`, `summary.json`, `raw.csv` and `summary.md`.
 
 ## A. Scheduling algorithm benchmark (SIMULATED)
 

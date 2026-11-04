@@ -1,7 +1,7 @@
 // The live view: what each worker is doing right now, what runs next, and what just happened.
 import { api } from '../api.js';
 import { act } from '../app.js';
-import { badge, card, empty, fmtTime, h, progress, relative } from '../ui.js';
+import { badge, card, empty, fmtTime, h, progress, relative, toast } from '../ui.js';
 import { openJob } from './jobs.js';
 
 let busy = false;
@@ -26,8 +26,8 @@ const DEMO_JOBS = [
 ];
 
 async function runDemo() {
-    for (const [name, taskType, input, priority, queue, estimatedMs] of DEMO_JOBS) {
-        await api.post('/api/jobs', { name, taskType, input, priority, queue, estimatedMs }, 'demo');
+    for (const [, taskType, input, priority, queue, estimatedMs] of DEMO_JOBS) {
+        await api.post('/api/jobs', { taskType, input, priority, queue, estimatedMs });
     }
 }
 
@@ -37,7 +37,7 @@ const workerAction = (worker, path, message) =>
 function slotView(job) {
     if (!job) return h('div', { class: 'slot idle' }, 'Idle');
     return h('div', { class: 'slot', onclick: () => openJob(job.id), style: { cursor: 'pointer' } },
-        h('div', { class: 'job-line' }, h('strong', {}, job.name), h('span', { class: 'muted' }, `${job.progressPercent}%`)),
+        h('div', { class: 'job-line' }, h('strong', {}, job.label), h('span', { class: 'muted' }, `${job.progressPercent}%`)),
         progress(job.progressPercent));
 }
 
@@ -77,8 +77,7 @@ function updateCard(worker, runningJobs) {
         ...Array.from({ length: worker.concurrencyLimit }, (_, i) => slotView(jobs[i])),
         h('div', { class: 'row small muted' },
             h('span', {}, `${worker.succeededAttempts} done`), h('span', {}, '·'),
-            h('span', {}, `heartbeat ${relative(worker.lastHeartbeatAt)}`),
-            worker.demoPaceMs ? h('span', { title: 'Demo pacing: the worker waits this long per percent of progress so jobs can be watched' }, `· paced ${worker.demoPaceMs} ms/%`) : null));
+            h('span', {}, `heartbeat ${relative(worker.lastHeartbeatAt)}`)));
     if (entry.status !== worker.status) {
         entry.actions.replaceChildren(...controlsFor(worker));
         entry.status = worker.status;
@@ -91,7 +90,7 @@ function statItems(o) {
     const item = (label, value, color) => h('div', { class: 'stat' },
         h('div', { class: 'value' }, value), h('div', { class: 'label' }, h('i', { style: { background: color } }), label));
     return [
-        item('Waiting', s.QUEUED + s.SCHEDULED + s.BLOCKED, 'var(--queued)'),
+        item('Waiting', s.QUEUED + s.BLOCKED, 'var(--queued)'),
         item('Running', s.RUNNING, 'var(--running)'),
         item('Succeeded', s.SUCCEEDED, 'var(--ok)'),
         item('Failed', s.FAILED + s.SKIPPED, 'var(--bad)'),
@@ -169,16 +168,26 @@ function build(root) {
         class: 'button secondary',
         onclick: () => act(() => api.post('/api/admin/workers/launch?slots=2'), 'Starting a new worker…').then(update).catch(() => {}),
     }, '+ Add worker');
+    const clearHistory = h('button', {
+        class: 'button danger',
+        onclick: () => confirm('Permanently delete all logs and finished jobs, including their results and files? '
+            + 'This cannot be undone. Queued and running jobs are not affected.')
+            && act(() => api.post('/api/admin/history/clear')).then(cleared => {
+                const kept = cleared.jobsKept ? `; kept ${cleared.jobsKept} finished that unfinished jobs depend on` : '';
+                toast(`Cleared ${cleared.jobs} jobs and ${cleared.logs} logs${kept}`);
+                return update();
+            }).catch(() => {}),
+    }, 'Clear history');
 
     cards.clear();
     root.replaceChildren(
         h('div', { class: 'page-head' }, h('h1', {}, 'Live'), h('span', { class: 'spacer' }),
-            h('div', { class: 'segmented', title: 'Scheduling policy' }, parts.policyButtons), addWorker, demoButton),
+            h('div', { class: 'segmented', title: 'Scheduling policy' }, parts.policyButtons), clearHistory, addWorker, demoButton),
         parts.stats,
         h('div', { class: 'section' }, h('div', { class: 'section-head' }, h('h2', {}, 'Workers'), parts.workerSummary), parts.workers),
         h('div', { class: 'section grid cols-2' },
-            card('Up next', h('a', { href: '#/scheduler', class: 'small' }, 'Scheduler →'), parts.upNext),
-            card('Activity', null, parts.activity)));
+            card('Up next', null, parts.upNext),
+            card('Activity', h('a', { href: '#/logs', class: 'small' }, 'All logs →'), parts.activity)));
 }
 
 export default {

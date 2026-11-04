@@ -5,7 +5,7 @@ import {
 
 const FILTERS = {
     All: () => true,
-    Active: j => ['SCHEDULED', 'BLOCKED', 'QUEUED', 'RUNNING'].includes(j.state),
+    Active: j => ['BLOCKED', 'QUEUED', 'RUNNING'].includes(j.state),
     Done: j => j.state === 'SUCCEEDED',
     Failed: j => ['FAILED', 'SKIPPED', 'CANCELLED'].includes(j.state),
 };
@@ -19,8 +19,9 @@ async function loadWorkerNames() {
 }
 
 const columns = [
-    { label: 'Job', render: j => h('div', {}, j.name, h('div', { class: 'muted mono' }, shortId(j.id))) },
+    { label: 'Job', render: j => h('div', {}, j.label, h('div', { class: 'muted mono' }, shortId(j.id))) },
     { label: 'Task', render: j => j.taskType },
+    { label: 'Priority', num: true, render: j => j.priority },
     { label: 'Status', render: j => badge(j.state) },
     { label: 'Progress', render: j => h('div', { style: { minWidth: '110px' } }, progress(j.progressPercent, j.state === 'SUCCEEDED')) },
     { label: 'Worker', render: j => workerNames.get(j.currentWorkerId) || '—' },
@@ -55,7 +56,7 @@ async function draw() {
 
 async function jobDetail(id) {
     const [{ job, attempts, events, artifacts }] = await Promise.all([api.get(`/api/jobs/${id}/history`), loadWorkerNames()]);
-    const cancellable = ['SCHEDULED', 'BLOCKED', 'QUEUED'].includes(job.state);
+    const cancellable = ['BLOCKED', 'QUEUED'].includes(job.state);
     const cancel = h('button', {
         class: 'button danger',
         onclick: async () => {
@@ -70,25 +71,25 @@ async function jobDetail(id) {
     }, 'Cancel');
 
     return h('div', { class: 'stack' },
-        h('div', { class: 'row' }, h('h1', {}, job.name)),
+        h('div', { class: 'row' }, h('h1', {}, job.label)),
         h('div', { class: 'row' }, badge(job.state), h('span', { class: 'muted small' }, `${job.taskType} · priority ${job.priority} · queue ${job.queue}`),
             h('span', { class: 'spacer' }), cancellable ? cancel : null),
         job.state === 'RUNNING' || job.state === 'SUCCEEDED' ? h('div', {},
             progress(job.progressPercent, job.state === 'SUCCEEDED'),
             h('div', { class: 'muted small', style: { marginTop: '4px' } }, `${job.progressPercent}% · ${job.progressMessage || ''}`)) : null,
-        job.errorCode && job.state !== 'SUCCEEDED' ? card(null, null, h('strong', {}, job.errorCode), h('div', { class: 'muted' }, job.errorMessage)) : null,
+        job.error && job.state !== 'SUCCEEDED' ? card(null, null, h('div', { class: 'muted' }, job.error)) : null,
         card(null, null, h('dl', { class: 'facts' },
             h('dt', {}, 'Submitted'), h('dd', {}, fmtTime(job.submittedAt)),
             h('dt', {}, 'Started'), h('dd', {}, fmtTime(job.startedAt)),
             h('dt', {}, 'Finished'), h('dd', {}, fmtTime(job.finishedAt)),
             h('dt', {}, 'Run time'), h('dd', {}, fmtDuration(between(job.startedAt, job.finishedAt))),
-            h('dt', {}, 'Attempts'), h('dd', {}, `${job.attemptsUsed} of ${job.maxRetries + 1} allowed`))),
+            h('dt', {}, 'Attempts'), h('dd', {}, `${job.attemptsUsed}`))),
         job.output ? card('Result', null, json(job.output)) : null,
         artifacts.length ? card('Files', null, h('ul', { class: 'list' }, artifacts.map(a => h('li', {},
-            h('a', { href: `/api/artifacts/${a.id}/content`, class: 'grow' }, a.originalName), h('span', { class: 'muted small' }, a.role.toLowerCase()))))) : null,
+            h('a', { href: `/api/artifacts/${a.id}/content`, class: 'grow' }, a.originalName))))) : null,
         attempts.length ? card('Attempts', null, h('ul', { class: 'list' }, attempts.map(a => h('li', {},
             h('span', { class: 'rank' }, `#${a.attemptNumber}`),
-            h('span', { class: 'grow' }, workerNames.get(a.workerId) || a.workerId, a.errorCode ? h('span', { class: 'muted' }, ` — ${a.errorCode}`) : null),
+            h('span', { class: 'grow' }, workerNames.get(a.workerId) || a.workerId, a.error ? h('span', { class: 'muted' }, ` — ${a.error.split(':')[0]}`) : null),
             badge(a.state))))) : null,
         h('details', {}, h('summary', {}, 'Input'), json(job.input)),
         h('details', {}, h('summary', {}, `History (${events.length})`), h('ul', { class: 'list' }, events.map(e =>
@@ -100,12 +101,19 @@ async function refreshDrawer() {
         openJobId = null;
         return;
     }
+    const fresh = await jobDetail(openJobId);
     const content = document.getElementById('drawer-content');
     const panel = content.parentElement;
-    const scroll = panel.scrollTop;
+
+    // Read the page state only now, so anything the user did during the fetch is kept.
     const openDetails = [...content.querySelectorAll('details')].map(d => d.open);
-    content.replaceChildren(await jobDetail(openJobId));
-    content.querySelectorAll('details').forEach((d, i) => (d.open = openDetails[i] || false));
+    fresh.querySelectorAll('details').forEach((d, i) => (d.open = openDetails[i] || false));
+    if (content.firstElementChild?.isEqualNode(fresh)) return; // nothing changed: leave scrolling and text selection alone
+
+    const scroll = panel.scrollTop;
+    const blocks = [...content.querySelectorAll('pre.json')].map(p => [p.scrollTop, p.scrollLeft]);
+    content.replaceChildren(fresh);
+    content.querySelectorAll('pre.json').forEach((p, i) => ([p.scrollTop, p.scrollLeft] = blocks[i] || [0, 0]));
     panel.scrollTop = scroll;
 }
 

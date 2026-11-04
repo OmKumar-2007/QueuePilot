@@ -13,11 +13,10 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * Stores artifacts as files named by a generated UUID under {@code <dataDir>/artifacts}.
+ * Stores artifacts as files named by their artifact id (a UUID) under {@code <dataDir>/artifacts}.
  * File names never come from user input, so path traversal is impossible.
  */
 @Component
@@ -33,8 +32,7 @@ public class LocalFileArtifactStorage implements ArtifactStorage {
     }
 
     @Override
-    public StoredFile store(InputStream content, long maxBytes) throws IOException {
-        String key = UUID.randomUUID().toString();
+    public StoredFile store(String key, InputStream content, long maxBytes) throws IOException {
         Path temp = Files.createTempFile(root, "upload-", ".tmp");
         MessageDigest digest = sha256();
         long size = 0;
@@ -54,17 +52,17 @@ public class LocalFileArtifactStorage implements ArtifactStorage {
             throw e;
         }
         Files.move(temp, resolve(key), StandardCopyOption.ATOMIC_MOVE);
-        return new StoredFile(key, size, HexFormat.of().formatHex(digest.digest()));
+        return new StoredFile(size, HexFormat.of().formatHex(digest.digest()));
     }
 
     @Override
-    public InputStream open(String storageKey) throws IOException {
-        return Files.newInputStream(resolve(storageKey));
+    public InputStream open(String key) throws IOException {
+        return Files.newInputStream(resolve(key));
     }
 
     @Override
-    public void delete(String storageKey) throws IOException {
-        Files.deleteIfExists(resolve(storageKey));
+    public void delete(String key) throws IOException {
+        Files.deleteIfExists(resolve(key));
     }
 
     private Path resolve(String key) {

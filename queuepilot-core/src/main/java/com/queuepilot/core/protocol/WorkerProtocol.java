@@ -13,9 +13,6 @@ public final class WorkerProtocol {
     private WorkerProtocol() {
     }
 
-    public static final String KIND_JAVA_PLUGIN = "JAVA_PLUGIN";
-    public static final String KIND_CONTAINER = "CONTAINER";
-
     /** Commands a coordinator can piggy-back on a heartbeat response. */
     public static final String COMMAND_KILL = "KILL";
     public static final String COMMAND_FREEZE = "FREEZE";
@@ -26,49 +23,26 @@ public final class WorkerProtocol {
     /** Stop all running attempts now; they are reported as failed (retryable) and requeued. */
     public static final String COMMAND_INTERRUPT = "INTERRUPT";
 
+    /** {@code supportedTasks} are the task types this worker has a plugin for. */
     public record RegisterRequest(String name,
                                   int concurrencyLimit,
-                                  List<String> capabilities,
                                   List<String> supportedTasks,
-                                  String enrollSecret,
                                   long demoPaceMs) {
     }
 
-    public record RegisterResponse(String workerId,
-                                   String workerToken,
-                                   long heartbeatIntervalMs,
-                                   long leaseDurationMs,
-                                   long claimPollMs) {
-    }
-
-    public record ClaimRequest(int freeSlots) {
-    }
-
-    public record ContainerSpec(String image, List<String> command, int cpuMillis, int memoryMb) {
+    /** After registering, the worker identifies itself with {@code workerId} in the X-Worker-Id header. */
+    public record RegisterResponse(String workerId, long heartbeatIntervalMs) {
     }
 
     public record Assignment(String attemptId,
-                             String fencingToken,
                              int attemptNumber,
                              String jobId,
                              String taskType,
-                             String taskVersion,
-                             String executorKind,
                              Map<String, Object> input,
-                             List<String> inputArtifactIds,
-                             long leaseDurationMs,
-                             int timeoutSeconds,
-                             ContainerSpec container) {
-
-        public String taskIdentifier() {
-            return taskType + "@" + taskVersion;
-        }
+                             int timeoutSeconds) {
     }
 
-    public record AttemptRef(String attemptId, String fencingToken) {
-    }
-
-    public record HeartbeatRequest(List<AttemptRef> activeAttempts) {
+    public record HeartbeatRequest(List<String> activeAttemptIds) {
     }
 
     /**
@@ -78,12 +52,12 @@ public final class WorkerProtocol {
     public record HeartbeatResponse(List<String> renewed, List<String> revoked, String command) {
     }
 
-    public record ProgressReport(String fencingToken, int percent, String message) {
+    public record ProgressReport(int percent, String message) {
     }
 
-    public record CompletionReport(String fencingToken, Map<String, Object> output, List<String> outputArtifactIds) {
+    public record CompletionReport(Map<String, Object> output, List<String> outputArtifactIds) {
     }
 
-    public record FailureReport(String fencingToken, String errorCode, String message, boolean retryable) {
+    public record FailureReport(String errorCode, String message, boolean retryable) {
     }
 }

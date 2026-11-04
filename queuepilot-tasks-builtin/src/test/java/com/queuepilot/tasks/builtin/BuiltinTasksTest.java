@@ -98,11 +98,10 @@ class BuiltinTasksTest {
 
     @Test
     void allBuiltinsAreDiscoverableThroughServiceLoaderWithManifests() {
-        List<String> ids = ServiceLoader.load(TaskExecutor.class).stream()
-                .map(provider -> provider.get().identifier()).sorted().toList();
-        assertThat(ids).containsExactly("file-checksum@1.0.0", "monte-carlo-pi@1.0.0", "sorting@1.0.0", "text-analysis@1.0.0");
-        for (String id : ids) {
-            String type = id.substring(0, id.indexOf('@'));
+        List<String> types = ServiceLoader.load(TaskExecutor.class).stream()
+                .map(provider -> provider.get().taskType()).sorted().toList();
+        assertThat(types).containsExactly("file-checksum", "javascript", "monte-carlo-pi", "sorting", "text-analysis");
+        for (String type : types) {
             assertThat(getClass().getResource("/META-INF/queuepilot/tasks/" + type + ".json")).as(type).isNotNull();
         }
     }

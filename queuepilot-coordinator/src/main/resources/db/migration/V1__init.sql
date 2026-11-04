@@ -2,72 +2,48 @@
 -- JSON documents are stored as VARCHAR text (ADR-004).
 
 CREATE TABLE task_definition (
-    id                    VARCHAR(36)   PRIMARY KEY,
-    task_type             VARCHAR(64)   NOT NULL,
-    version               VARCHAR(32)   NOT NULL,
-    display_name          VARCHAR(128)  NOT NULL,
-    description           VARCHAR(1000),
-    executor_kind         VARCHAR(16)   NOT NULL,
-    required_capabilities VARCHAR(1000) NOT NULL,
-    input_schema          VARCHAR(100000) NOT NULL,
-    output_schema         VARCHAR(100000) NOT NULL,
-    cpu_millis            INT           NOT NULL,
-    memory_mb             INT           NOT NULL,
-    timeout_seconds       INT           NOT NULL,
-    max_retries           INT           NOT NULL,
-    default_priority      INT           NOT NULL,
-    default_estimated_ms  BIGINT        NOT NULL,
-    container_image       VARCHAR(300),
-    container_command     VARCHAR(2000),
-    enabled               BOOLEAN       NOT NULL,
-    created_at            TIMESTAMP WITH TIME ZONE NOT NULL,
-    CONSTRAINT uq_task_type_version UNIQUE (task_type, version)
+    id                   VARCHAR(36)     PRIMARY KEY,
+    task_type            VARCHAR(64)     NOT NULL UNIQUE,
+    display_name         VARCHAR(128)    NOT NULL,
+    description          VARCHAR(1000),
+    input_schema         VARCHAR(100000) NOT NULL,
+    timeout_seconds      INT             NOT NULL,
+    max_retries          INT             NOT NULL,
+    default_priority     INT             NOT NULL,
+    default_estimated_ms BIGINT          NOT NULL
 );
 
 CREATE TABLE workflow (
     id         VARCHAR(36)  PRIMARY KEY,
     name       VARCHAR(128) NOT NULL,
-    client_id  VARCHAR(64)  NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 CREATE TABLE job (
-    id                    VARCHAR(36)   PRIMARY KEY,
-    name                  VARCHAR(128)  NOT NULL,
-    task_definition_id    VARCHAR(36)   NOT NULL REFERENCES task_definition (id),
-    task_type             VARCHAR(64)   NOT NULL,
-    task_version          VARCHAR(32)   NOT NULL,
-    executor_kind         VARCHAR(16)   NOT NULL,
-    required_capabilities VARCHAR(1000) NOT NULL,
-    workflow_id           VARCHAR(36)   REFERENCES workflow (id),
-    workflow_step         VARCHAR(64),
-    queue_name            VARCHAR(64)   NOT NULL,
-    client_id             VARCHAR(64)   NOT NULL,
-    state                 VARCHAR(16)   NOT NULL,
-    priority              INT           NOT NULL,
-    estimated_ms          BIGINT        NOT NULL,
-    input_json            VARCHAR(100000) NOT NULL,
-    output_json           VARCHAR(300000),
-    output_artifact_ids   VARCHAR(4000),
-    error_code            VARCHAR(64),
-    error_message         VARCHAR(2000),
-    progress_percent      INT           NOT NULL,
-    progress_message      VARCHAR(500),
-    current_attempt_id    VARCHAR(36),
-    current_worker_id     VARCHAR(36),
-    attempts_used         INT           NOT NULL,
-    max_retries           INT           NOT NULL,
-    timeout_seconds       INT           NOT NULL,
-    submitted_at          TIMESTAMP WITH TIME ZONE NOT NULL,
-    start_at              TIMESTAMP WITH TIME ZONE,
-    ready_at              TIMESTAMP WITH TIME ZONE,
-    deadline_at           TIMESTAMP WITH TIME ZONE,
-    started_at            TIMESTAMP WITH TIME ZONE,
-    finished_at           TIMESTAMP WITH TIME ZONE,
-    version               BIGINT        NOT NULL
+    id                  VARCHAR(36)     PRIMARY KEY,
+    task_type           VARCHAR(64)     NOT NULL,
+    workflow_id         VARCHAR(36)     REFERENCES workflow (id),
+    workflow_step       VARCHAR(64),
+    queue_name          VARCHAR(64)     NOT NULL,
+    state               VARCHAR(16)     NOT NULL,
+    priority            INT             NOT NULL,
+    estimated_ms        BIGINT          NOT NULL,
+    input_json          VARCHAR(100000) NOT NULL,
+    output_json         VARCHAR(300000),
+    output_artifact_ids VARCHAR(4000),
+    error               VARCHAR(2100),
+    progress_percent    INT             NOT NULL,
+    progress_message    VARCHAR(500),
+    current_attempt_id  VARCHAR(36),
+    current_worker_id   VARCHAR(36),
+    attempts_used       INT             NOT NULL,
+    submitted_at        TIMESTAMP WITH TIME ZONE NOT NULL,
+    ready_at            TIMESTAMP WITH TIME ZONE,
+    started_at          TIMESTAMP WITH TIME ZONE,
+    finished_at         TIMESTAMP WITH TIME ZONE,
+    version             BIGINT          NOT NULL
 );
 CREATE INDEX idx_job_state_ready ON job (state, ready_at);
-CREATE INDEX idx_job_client_state ON job (client_id, state);
 CREATE INDEX idx_job_workflow ON job (workflow_id);
 CREATE INDEX idx_job_submitted ON job (submitted_at);
 
@@ -83,14 +59,11 @@ CREATE TABLE worker (
     name              VARCHAR(64)   NOT NULL,
     status            VARCHAR(16)   NOT NULL,
     concurrency_limit INT           NOT NULL,
-    capabilities      VARCHAR(4000) NOT NULL,
     supported_tasks   VARCHAR(8000) NOT NULL,
-    token_hash        VARCHAR(64)   NOT NULL,
-    pending_command   VARCHAR(16),
-    registered_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+    pending_command   VARCHAR(200),
+    demo_pace_ms      BIGINT        NOT NULL,
     last_heartbeat_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
-CREATE UNIQUE INDEX idx_worker_token ON worker (token_hash);
 CREATE INDEX idx_worker_status ON worker (status, last_heartbeat_at);
 
 CREATE TABLE attempt (
@@ -98,14 +71,11 @@ CREATE TABLE attempt (
     job_id             VARCHAR(36) NOT NULL REFERENCES job (id),
     worker_id          VARCHAR(36) NOT NULL REFERENCES worker (id),
     attempt_number     INT         NOT NULL,
-    fencing_token_hash VARCHAR(64) NOT NULL,
     state              VARCHAR(16) NOT NULL,
     started_at         TIMESTAMP WITH TIME ZONE NOT NULL,
     lease_expires_at   TIMESTAMP WITH TIME ZONE NOT NULL,
-    last_heartbeat_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     finished_at        TIMESTAMP WITH TIME ZONE,
-    error_code         VARCHAR(64),
-    error_message      VARCHAR(2000)
+    error              VARCHAR(2000)
 );
 CREATE INDEX idx_attempt_state_lease ON attempt (state, lease_expires_at);
 CREATE INDEX idx_attempt_job ON attempt (job_id);
@@ -114,13 +84,10 @@ CREATE INDEX idx_attempt_worker_state ON attempt (worker_id, state);
 CREATE TABLE artifact (
     id            VARCHAR(36)  PRIMARY KEY,
     job_id        VARCHAR(36)  REFERENCES job (id),
-    role          VARCHAR(8)   NOT NULL,
     original_name VARCHAR(255) NOT NULL,
     content_type  VARCHAR(100) NOT NULL,
     size_bytes    BIGINT       NOT NULL,
     sha256        VARCHAR(64)  NOT NULL,
-    storage_key   VARCHAR(64)  NOT NULL,
-    client_id     VARCHAR(64),
     created_at    TIMESTAMP WITH TIME ZONE NOT NULL
 );
 CREATE INDEX idx_artifact_job ON artifact (job_id);
@@ -140,11 +107,10 @@ CREATE TABLE scheduler_settings (
     id                         INT         PRIMARY KEY,
     active_policy              VARCHAR(32) NOT NULL,
     aging_interval_seconds     INT         NOT NULL,
-    aging_step                 INT         NOT NULL,
-    max_active_jobs_per_client INT         NOT NULL
+    aging_step                 INT         NOT NULL
 );
-INSERT INTO scheduler_settings (id, active_policy, aging_interval_seconds, aging_step, max_active_jobs_per_client)
-VALUES (1, 'FCFS', 5, 1, 500);
+INSERT INTO scheduler_settings (id, active_policy, aging_interval_seconds, aging_step)
+VALUES (1, 'FCFS', 5, 1);
 
 CREATE TABLE benchmark_report (
     id               VARCHAR(36)     PRIMARY KEY,

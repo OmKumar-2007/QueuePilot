@@ -80,9 +80,6 @@ export function relative(iso) {
     return `${Math.floor(seconds / 3600)}h ago`;
 }
 
-export const fmtNumber = (n, digits = 0) =>
-    n === null || n === undefined ? '—' : Number(n).toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
-
 export const json = value => h('pre', { class: 'json' }, JSON.stringify(value, null, 2));
 
 export const empty = (title, text) => h('div', { class: 'empty' }, h('strong', {}, title), text);
@@ -128,6 +125,6 @@ export function openDrawer(content) {
 export const drawerIsOpen = () => !document.getElementById('drawer').hidden;
 
 export const STATE_COLORS = {
-    SCHEDULED: 'var(--queued)', BLOCKED: 'var(--idle)', QUEUED: 'var(--queued)', RUNNING: 'var(--running)',
+    BLOCKED: 'var(--idle)', QUEUED: 'var(--queued)', RUNNING: 'var(--running)',
     SUCCEEDED: 'var(--ok)', FAILED: 'var(--bad)', CANCELLED: 'var(--idle)', SKIPPED: 'var(--idle)',
 };

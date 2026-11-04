@@ -1,6 +1,5 @@
 package com.queuepilot.worker;
 
-import com.queuepilot.worker.container.ContainerTaskRunner;
 
 /** Entry point of a worker process. */
 public final class WorkerMain {
@@ -24,16 +23,7 @@ public final class WorkerMain {
         }
 
         TaskExecutorRegistry registry = TaskExecutorRegistry.load(config.pluginsDir());
-        ContainerTaskRunner containers = null;
-        if (config.containersEnabled()) {
-            containers = new ContainerTaskRunner(config.dockerCommand());
-            if (!containers.dockerAvailable()) {
-                System.err.println("--containers given but '" + config.dockerCommand() + "' is not usable; container tasks disabled");
-                containers = null;
-            }
-        }
-
-        WorkerRuntime runtime = new WorkerRuntime(config, new HttpCoordinatorClient(config.coordinatorUrl()), registry, containers);
+        WorkerRuntime runtime = new WorkerRuntime(config, new HttpCoordinatorClient(config.coordinatorUrl()), registry);
         Runtime.getRuntime().addShutdownHook(new Thread(runtime::stop, "qp-shutdown"));
         runtime.start();
     }

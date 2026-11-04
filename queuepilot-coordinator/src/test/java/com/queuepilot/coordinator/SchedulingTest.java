@@ -40,13 +40,11 @@ class SchedulingTest extends CoordinatorTestBase {
     }
 
     @Test
-    void jobIsOnlyAssignedToWorkersWithCapabilitiesAndImplementation() throws Exception {
+    void jobIsOnlyAssignedToWorkersWithThePlugin() throws Exception {
         String id = submitId(piJob(10_000));
-        Worker noCpu = registerWorker("io-only", 2, List.of("io"), ALL_BUILTINS);
-        Worker noImplementation = registerWorker("sorter", 2, List.of("cpu"), List.of("sorting@1.0.0"));
-        Worker able = registerWorker("cpu", 2, List.of("cpu"), List.of("monte-carlo-pi@1.0.0"));
+        Worker noImplementation = registerWorker("sorter", 2, List.of("sorting"));
+        Worker able = registerWorker("pi", 2, List.of("monte-carlo-pi"));
 
-        assertThat(claim(noCpu)).isNull();
         assertThat(claim(noImplementation)).isNull();
         JsonNode assignment = claim(able);
         assertThat(assignment.get("jobId").asText()).isEqualTo(id);
@@ -58,7 +56,7 @@ class SchedulingTest extends CoordinatorTestBase {
     void workerNeverExceedsItsConcurrencyLimit() throws Exception {
         submitId(piJob(10_000));
         submitId(piJob(10_000));
-        Worker single = registerWorker("single", 1, List.of("cpu"), ALL_BUILTINS);
+        Worker single = registerWorker("single", 1, ALL_BUILTINS);
         assertThat(claim(single)).isNotNull();
         assertThat(claim(single)).isNull();
     }
@@ -72,11 +70,11 @@ class SchedulingTest extends CoordinatorTestBase {
         String quick = submitId(piJob(1_000, 5, "default"));
         Worker worker = generalWorker("w");
 
-        setScheduler("SJF", 500);
+        setScheduler("SJF");
         assertThat(claim(worker).get("jobId").asText()).isEqualTo(quick);
-        setScheduler("PRIORITY_AGING", 500);
+        setScheduler("PRIORITY_AGING");
         assertThat(claim(worker).get("jobId").asText()).isEqualTo(urgent);
-        setScheduler("FCFS", 500);
+        setScheduler("FCFS");
         assertThat(claim(worker).get("jobId").asText()).isEqualTo(slowEarly);
     }
 
@@ -99,13 +97,13 @@ class SchedulingTest extends CoordinatorTestBase {
     void schedulerPreviewExplainsReadyAndWaitingJobs() throws Exception {
         String ready = submitId(piJob(1_000, 5, "default"));
         Map<String, Object> later = piJob(1_000, 5, "default");
-        later.put("startAt", T0.plusSeconds(300).toString());
+        later.put("dependsOn", List.of(ready));
         submitId(later);
 
         JsonNode preview = body(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                 .get("/api/scheduler")).andReturn());
         assertThat(preview.get("ready").get(0).get("jobId").asText()).isEqualTo(ready);
-        assertThat(preview.get("notReady").get(0).get("reason").asText()).startsWith("Starts at");
+        assertThat(preview.get("notReady").get(0).get("reason").asText()).startsWith("Waiting for 1 prerequisite");
     }
 
     @Test
@@ -116,7 +114,7 @@ class SchedulingTest extends CoordinatorTestBase {
         }
         List<Worker> workers = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
-            workers.add(registerWorker("racer-" + i, 10, List.of("cpu"), ALL_BUILTINS));
+            workers.add(registerWorker("racer-" + i, 10, ALL_BUILTINS));
         }
 
         ExecutorService pool = Executors.newFixedThreadPool(6);

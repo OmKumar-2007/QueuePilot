@@ -5,7 +5,6 @@ import com.queuepilot.coordinator.event.EventLog;
 import com.queuepilot.coordinator.event.EventLog.EventView;
 import com.queuepilot.coordinator.job.JobEntity;
 import com.queuepilot.coordinator.job.JobRepository;
-import com.queuepilot.coordinator.job.JobView;
 import com.queuepilot.coordinator.worker.WorkerEntity;
 import com.queuepilot.coordinator.worker.WorkerRepository;
 import com.queuepilot.core.job.AttemptState;
@@ -56,7 +55,6 @@ public class MetricsService {
                            double slotUtilization,
                            double throughputPerMinute,
                            ScheduleMetrics recentSucceeded,
-                           List<JobView> deadlineAlerts,
                            List<EventView> recentEvents) {
     }
 
@@ -85,11 +83,8 @@ public class MetricsService {
                 .map(job -> new JobTiming(job.getSubmittedAt(), job.getStartedAt(), job.getFinishedAt()))
                 .toList();
 
-        List<JobView> alerts = jobs.findActiveWithDeadlineBefore(now.plus(Duration.ofMinutes(5))).stream()
-                .map(job -> JobView.summary(job, now)).toList();
-
         return new Overview(now, total, byState, online.size(), allWorkers.size(), slots, running,
                 slots == 0 ? 0 : Math.min(1.0, running / (double) slots), perMinute,
-                MetricsCalculator.compute(timings, Math.max(1, slots)), alerts, events.recent(15));
+                MetricsCalculator.compute(timings, Math.max(1, slots)), events.recent(15));
     }
 }

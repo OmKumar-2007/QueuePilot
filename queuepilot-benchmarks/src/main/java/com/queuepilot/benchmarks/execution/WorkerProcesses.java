@@ -35,7 +35,7 @@ final class WorkerProcesses implements AutoCloseable {
             String name = runId + i;
             ProcessBuilder builder = new ProcessBuilder(javaExecutable(), "-jar", config.workerJar().toString(),
                     "--coordinator", config.coordinatorUrl(), "--name", name,
-                    "--slots", String.valueOf(config.slotsPerWorker()), "--capabilities", "cpu,io,text",
+                    "--slots", String.valueOf(config.slotsPerWorker()),
                     "--work-dir", Path.of("benchmark-results", "work", name).toString())
                     .redirectErrorStream(true)
                     .redirectOutput(logDir.resolve(name + ".log").toFile());

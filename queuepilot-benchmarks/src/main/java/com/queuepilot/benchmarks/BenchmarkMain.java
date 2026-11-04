@@ -31,8 +31,7 @@ public final class BenchmarkMain {
                    [--worker-jar queuepilot-worker/target/queuepilot-worker-1.0.0-exec.jar] [--worker-counts 1,2,4]
                    [--slots 1] [--workloads "monte-carlo-pi:samples=20000000;sorting:count=2000000"]
                    [--jobs 8] [--warmup 1] [--reps 3] [--out benchmark-results] [--publish]
-            Publishing (--publish) imports the report into the coordinator dashboard and needs
-              --coordinator URL --admin-user admin and QP_ADMIN_PASSWORD (or --admin-password).
+            Publishing (--publish) imports the report into the coordinator dashboard (--coordinator URL).
             """;
 
     private BenchmarkMain() {
@@ -45,16 +44,14 @@ public final class BenchmarkMain {
         }
         Map<String, String> options = parse(Arrays.copyOfRange(args, 1, args.length));
         String coordinator = options.getOrDefault("coordinator", "http://localhost:8080");
-        String adminUser = options.getOrDefault("admin-user", "admin");
-        String adminPassword = options.getOrDefault("admin-password", System.getenv("QP_ADMIN_PASSWORD"));
 
-        Report report = args[0].equals("simulate") ? simulate(options) : execute(options, coordinator, adminUser, adminPassword);
+        Report report = args[0].equals("simulate") ? simulate(options) : execute(options, coordinator);
         ReportWriter.captureEnvironment(report.environment);
         Path dir = ReportWriter.write(report, Path.of(options.getOrDefault("out", "benchmark-results")));
         System.out.println("Report written to " + dir.toAbsolutePath());
 
         if (options.containsKey("publish")) {
-            new ApiClient(coordinator, adminUser, adminPassword).adminPost("/api/admin/benchmarks", ReportWriter.toPublishable(report));
+            new ApiClient(coordinator).post("/api/admin/benchmarks", ReportWriter.toPublishable(report));
             System.out.println("Report published to " + coordinator);
         }
     }
@@ -86,7 +83,7 @@ public final class BenchmarkMain {
         }
     }
 
-    private static Report execute(Map<String, String> options, String coordinator, String adminUser, String adminPassword)
+    private static Report execute(Map<String, String> options, String coordinator)
             throws Exception {
         List<ExecutionBenchmark.Workload> workloads = new ArrayList<>();
         for (String spec : options.getOrDefault("workloads", "monte-carlo-pi:samples=20000000;sorting:count=2000000").split(";")) {
@@ -101,7 +98,7 @@ public final class BenchmarkMain {
             workloads.add(new ExecutionBenchmark.Workload(parts[0].trim(), input));
         }
         String workerJar = options.get("worker-jar");
-        ExecutionBenchmark.Config config = new ExecutionBenchmark.Config(coordinator, adminUser, adminPassword,
+        ExecutionBenchmark.Config config = new ExecutionBenchmark.Config(coordinator,
                 workerJar == null ? null : Path.of(workerJar),
                 Arrays.stream(options.getOrDefault("worker-counts", "1,2").split(",")).map(String::trim).map(Integer::parseInt).toList(),
                 Integer.parseInt(options.getOrDefault("slots", "1")),

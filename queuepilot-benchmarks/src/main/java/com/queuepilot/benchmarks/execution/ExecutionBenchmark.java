@@ -36,7 +36,7 @@ public final class ExecutionBenchmark {
         }
     }
 
-    public record Config(String coordinatorUrl, String adminUser, String adminPassword, Path workerJar,
+    public record Config(String coordinatorUrl, Path workerJar,
                          List<Integer> workerCounts, int slotsPerWorker, List<Workload> workloads, int jobsPerRun,
                          int warmupRuns, int repetitions, Duration runTimeout) {
     }
@@ -46,7 +46,7 @@ public final class ExecutionBenchmark {
 
     public ExecutionBenchmark(Config config) {
         this.config = config;
-        this.api = new ApiClient(config.coordinatorUrl(), config.adminUser(), config.adminPassword());
+        this.api = new ApiClient(config.coordinatorUrl());
     }
 
     public Report run() throws IOException, InterruptedException {
@@ -152,11 +152,10 @@ public final class ExecutionBenchmark {
         List<String> ids = new ArrayList<>();
         for (int i = 0; i < config.jobsPerRun(); i++) {
             Map<String, Object> request = new LinkedHashMap<>();
-            request.put("name", queue + "-" + i);
             request.put("taskType", workload.taskType());
             request.put("input", workload.input());
             request.put("queue", queue);
-            ids.add(api.post("/api/jobs", request, "benchmark").get("id").asText());
+            ids.add(api.post("/api/jobs", request).get("id").asText());
         }
         Set<String> terminal = Set.of("SUCCEEDED", "FAILED", "CANCELLED", "SKIPPED");
         long deadline = System.nanoTime() + config.runTimeout().toNanos();

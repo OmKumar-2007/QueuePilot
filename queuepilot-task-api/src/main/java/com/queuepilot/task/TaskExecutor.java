@@ -13,9 +13,6 @@ public interface TaskExecutor {
     /** Task type identifier, e.g. {@code "sorting"}. Must match the registered manifest. */
     String taskType();
 
-    /** Semantic version, e.g. {@code "1.0.0"}. Must match the registered manifest. */
-    String version();
-
     /**
      * Performs the work. Called on a worker thread.
      *
@@ -26,9 +23,4 @@ public interface TaskExecutor {
      *                     whether the coordinator may try again
      */
     TaskOutput execute(TaskInput input, TaskContext context) throws TaskFailure;
-
-    /** {@code "type@version"}, the key used to match jobs with executors. */
-    default String identifier() {
-        return taskType() + "@" + version();
-    }
 }

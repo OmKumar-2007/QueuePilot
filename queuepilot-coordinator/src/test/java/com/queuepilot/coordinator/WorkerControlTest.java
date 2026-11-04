@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class WorkerControlTest extends CoordinatorTestBase {
 
     private void act(Worker worker, String action) throws Exception {
-        mvc.perform(asAdmin(post("/api/admin/workers/" + worker.id() + "/" + action))).andExpect(status().isOk());
+        mvc.perform(post("/api/admin/workers/" + worker.id() + "/" + action)).andExpect(status().isOk());
     }
 
     private String workerStatus(Worker worker) throws Exception {
@@ -64,12 +64,12 @@ class WorkerControlTest extends CoordinatorTestBase {
         act(worker, "interrupt");
         assertThat(heartbeat(worker, assignment).get("command").asText()).isEqualTo("INTERRUPT");
         workerPost(worker, "/attempts/" + assignment.get("attemptId").asText() + "/fail",
-                Map.of("fencingToken", assignment.get("fencingToken").asText(), "errorCode", "INTERRUPTED",
-                        "message", "Interrupted by an administrator", "retryable", true)).andExpect(status().isOk());
+                Map.of("errorCode", "INTERRUPTED", "message", "Interrupted by an administrator", "retryable", true))
+                .andExpect(status().isOk());
 
         JsonNode job = job(id);
         assertThat(job.get("state").asText()).isEqualTo("QUEUED");
-        assertThat(job.get("errorCode").asText()).isEqualTo("INTERRUPTED");
+        assertThat(job.get("error").asText()).startsWith("INTERRUPTED");
     }
 
     @Test
@@ -86,8 +86,8 @@ class WorkerControlTest extends CoordinatorTestBase {
     @Test
     @DisplayName("Workers report their demo pacing so the dashboard can show it")
     void demoPacingIsVisible() throws Exception {
-        postJson("/api/worker/register", Map.of("name", "paced", "concurrencyLimit", 1, "capabilities", List.of("cpu"),
-                "supportedTasks", List.of("sorting@1.0.0"), "enrollSecret", "test-secret", "demoPaceMs", 150))
+        postJson("/api/worker/register", Map.of("name", "paced", "concurrencyLimit", 1,
+                "supportedTasks", List.of("sorting"), "demoPaceMs", 150))
                 .andExpect(status().isCreated());
         JsonNode workers = body(mvc.perform(get("/api/workers")).andReturn());
         assertThat(workers.get(0).get("demoPaceMs").asLong()).isEqualTo(150);
