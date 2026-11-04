@@ -20,7 +20,7 @@ import java.util.TreeMap;
 import java.util.stream.Stream;
 
 /**
- * Registry of the task implementations this worker can run, keyed by {@code type@version}.
+ * Registry of the task implementations this worker can run, keyed by task type.
  *
  * <p>Built-in tasks come from the worker's own classpath; extra plugin jars are loaded from the
  * plugins directory. Both are discovered with {@link ServiceLoader}, so adding a jar is all it
@@ -46,9 +46,9 @@ public class TaskExecutorRegistry implements AutoCloseable {
         ClassLoader loader = pluginClassLoader(pluginsDir);
         Map<String, TaskExecutor> found = new TreeMap<>();
         for (TaskExecutor executor : ServiceLoader.load(TaskExecutor.class, loader)) {
-            TaskExecutor previous = found.putIfAbsent(executor.identifier(), executor);
+            TaskExecutor previous = found.putIfAbsent(executor.taskType(), executor);
             if (previous != null) {
-                log.warn("Ignoring duplicate implementation of {} ({})", executor.identifier(), executor.getClass().getName());
+                log.warn("Ignoring duplicate implementation of {} ({})", executor.taskType(), executor.getClass().getName());
             }
         }
         log.info("Loaded task implementations: {}", found.keySet());
@@ -78,11 +78,11 @@ public class TaskExecutorRegistry implements AutoCloseable {
         }
     }
 
-    public Optional<TaskExecutor> find(String identifier) {
-        return Optional.ofNullable(executors.get(identifier));
+    public Optional<TaskExecutor> find(String taskType) {
+        return Optional.ofNullable(executors.get(taskType));
     }
 
-    public List<String> identifiers() {
+    public List<String> taskTypes() {
         return List.copyOf(executors.keySet());
     }
 

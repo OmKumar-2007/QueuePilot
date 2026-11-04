@@ -1,6 +1,5 @@
 package com.queuepilot.worker;
 
-import com.queuepilot.core.protocol.WorkerProtocol;
 import com.queuepilot.core.protocol.WorkerProtocol.Assignment;
 import com.queuepilot.core.protocol.WorkerProtocol.CompletionReport;
 import com.queuepilot.core.protocol.WorkerProtocol.FailureReport;
@@ -9,7 +8,6 @@ import com.queuepilot.task.TaskFailure;
 import com.queuepilot.task.TaskInput;
 import com.queuepilot.task.TaskOutput;
 import com.queuepilot.worker.WorkerTaskContext.CancelReason;
-import com.queuepilot.worker.container.ContainerTaskRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,7 +39,6 @@ public class AttemptRunner implements Runnable {
 
     private final Assignment assignment;
     private final TaskExecutorRegistry registry;
-    private final ContainerTaskRunner containerRunner;
     private final CoordinatorApi api;
     private final ActiveAttempts active;
     private final ScheduledExecutorService timer;
@@ -50,12 +47,10 @@ public class AttemptRunner implements Runnable {
     private final PauseGate pauseGate;
     private final Runnable onFinished;
 
-    public AttemptRunner(Assignment assignment, TaskExecutorRegistry registry, ContainerTaskRunner containerRunner,
-                         CoordinatorApi api, ActiveAttempts active, ScheduledExecutorService timer, Path workRoot,
+    public AttemptRunner(Assignment assignment, TaskExecutorRegistry registry, CoordinatorApi api, ActiveAttempts active, ScheduledExecutorService timer, Path workRoot,
                          long paceMsPerPercent, PauseGate pauseGate, Runnable onFinished) {
         this.assignment = assignment;
         this.registry = registry;
-        this.containerRunner = containerRunner;
         this.api = api;
         this.active = active;
         this.timer = timer;
@@ -70,13 +65,13 @@ public class AttemptRunner implements Runnable {
         Thread thread = Thread.currentThread();
         Path workDir = workRoot.resolve(assignment.attemptId());
         WorkerTaskContext context = new WorkerTaskContext(api, assignment, workDir, paceMsPerPercent, pauseGate);
-        active.add(assignment.attemptId(), assignment.fencingToken(), context);
+        active.add(assignment.attemptId(), context);
         ScheduledFuture<?> timeout = timer.schedule(() -> {
             context.cancel(CancelReason.TIMED_OUT);
             thread.interrupt();
         }, assignment.timeoutSeconds(), TimeUnit.SECONDS);
 
-        log.info("Attempt {} of job {} ({}) started", assignment.attemptNumber(), assignment.jobId(), assignment.taskIdentifier());
+        log.info("Attempt {} of job {} ({}) started", assignment.attemptNumber(), assignment.jobId(), assignment.taskType());
         try {
             Files.createDirectories(workDir);
             TaskOutput output = execute(context);
@@ -89,8 +84,7 @@ public class AttemptRunner implements Runnable {
                     // Make paced (demo) runs recognisable in the job output.
                     values.put("demoPacingMsPerPercent", paceMsPerPercent);
                 }
-                boolean accepted = api.complete(assignment.attemptId(), new CompletionReport(
-                        assignment.fencingToken(), values, output.artifactIds()));
+                boolean accepted = api.complete(assignment.attemptId(), new CompletionReport(values, output.artifactIds()));
                 log.info("Attempt {} of job {} completed{}", assignment.attemptNumber(), assignment.jobId(),
                         accepted ? "" : " but the coordinator rejected the result (stale attempt)");
             }
@@ -119,14 +113,8 @@ public class AttemptRunner implements Runnable {
     }
 
     private TaskOutput execute(WorkerTaskContext context) throws TaskFailure {
-        if (WorkerProtocol.KIND_CONTAINER.equals(assignment.executorKind())) {
-            if (containerRunner == null) {
-                throw TaskFailure.retryable("CONTAINERS_DISABLED", "This worker does not run container tasks");
-            }
-            return containerRunner.run(assignment.container(), new TaskInput(assignment.input()), context);
-        }
-        TaskExecutor executor = registry.find(assignment.taskIdentifier()).orElseThrow(() ->
-                TaskFailure.retryable("NO_EXECUTOR", "Worker has no implementation of " + assignment.taskIdentifier()));
+        TaskExecutor executor = registry.find(assignment.taskType()).orElseThrow(() ->
+                TaskFailure.retryable("NO_EXECUTOR", "Worker has no implementation of " + assignment.taskType()));
         return executor.execute(new TaskInput(assignment.input()), context);
     }
 
@@ -142,7 +130,7 @@ public class AttemptRunner implements Runnable {
 
     private void report(String code, String message, boolean retryable) {
         try {
-            api.fail(assignment.attemptId(), new FailureReport(assignment.fencingToken(), code, message, retryable));
+            api.fail(assignment.attemptId(), new FailureReport(code, message, retryable));
             log.info("Attempt {} of job {} failed: {} {}", assignment.attemptNumber(), assignment.jobId(), code, message);
         } catch (CoordinatorApi.CoordinatorException e) {
             log.warn("Could not report failure of attempt {}: {}", assignment.attemptId(), e.getMessage());

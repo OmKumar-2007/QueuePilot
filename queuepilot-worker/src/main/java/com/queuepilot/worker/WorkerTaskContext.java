@@ -77,8 +77,7 @@ public class WorkerTaskContext implements TaskContext {
         }
         lastReportMillis = now;
         try {
-            boolean accepted = api.progress(assignment.attemptId(),
-                    new ProgressReport(assignment.fencingToken(), percent, message));
+            boolean accepted = api.progress(assignment.attemptId(), new ProgressReport(percent, message));
             if (!accepted) {
                 cancel(CancelReason.REVOKED);
             }
@@ -131,21 +130,18 @@ public class WorkerTaskContext implements TaskContext {
 
     @Override
     public Path inputFile(String artifactId) throws IOException {
-        if (!assignment.inputArtifactIds().contains(artifactId)) {
-            throw new IOException("Artifact " + artifactId + " is not an input of this job");
-        }
         Path cached = downloaded.get(artifactId);
         if (cached != null) {
             return cached;
         }
         Path target = Files.createDirectories(workDir.resolve("inputs")).resolve(artifactId);
-        api.downloadInput(assignment.attemptId(), assignment.fencingToken(), artifactId, target);
+        api.downloadInput(assignment.attemptId(), artifactId, target);
         downloaded.put(artifactId, target);
         return target;
     }
 
     @Override
     public String saveOutputFile(Path file, String contentType) throws IOException {
-        return api.uploadOutput(assignment.attemptId(), assignment.fencingToken(), file, contentType);
+        return api.uploadOutput(assignment.attemptId(), file, contentType);
     }
 }

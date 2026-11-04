@@ -20,10 +20,6 @@ public class PrimeSieveTask implements TaskExecutor {
         return "prime-sieve";
     }
 
-    @Override
-    public String version() {
-        return "1.0.0";
-    }
 
     @Override
     public TaskOutput execute(TaskInput input, TaskContext context) throws TaskFailure {

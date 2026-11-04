@@ -4,13 +4,10 @@ import com.queuepilot.coordinator.attempt.AttemptRepository;
 import com.queuepilot.coordinator.attempt.AttemptService;
 import com.queuepilot.coordinator.config.QueuePilotProperties;
 import com.queuepilot.coordinator.error.Errors.ConflictException;
-import com.queuepilot.coordinator.error.Errors.ForbiddenException;
 import com.queuepilot.coordinator.error.Errors.NotFoundException;
 import com.queuepilot.coordinator.error.Errors.ValidationException;
 import com.queuepilot.coordinator.event.EventLog;
 import com.queuepilot.coordinator.event.EventType;
-import com.queuepilot.coordinator.security.SecretsProvider;
-import com.queuepilot.coordinator.security.TokenHasher;
 import com.queuepilot.core.job.AttemptState;
 import com.queuepilot.core.job.WorkerStatus;
 import com.queuepilot.core.protocol.WorkerProtocol;
@@ -28,33 +25,29 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/** Worker registration, authentication, health transitions and administrative controls (F6, F15). */
+/** Worker registration, health transitions and administrative controls (F6, F15). */
 @Service
 public class WorkerRegistryService {
 
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9._-]{1,64}");
-    private static final Pattern TASK_ID = Pattern.compile("[a-z][a-z0-9-]{1,63}@\\d{1,4}\\.\\d{1,4}\\.\\d{1,4}");
-    private static final Pattern CAPABILITY = Pattern.compile("[a-z0-9][a-z0-9_-]{0,31}");
+    private static final Pattern TASK_TYPE = Pattern.compile("[a-z][a-z0-9-]{1,63}");
 
     private final WorkerRepository workers;
     private final AttemptRepository attempts;
     private final AttemptService attemptService;
-    private final SecretsProvider secrets;
     private final EventLog events;
     private final QueuePilotProperties properties;
     private final Clock clock;
 
     public WorkerRegistryService(WorkerRepository workers, AttemptRepository attempts, @Lazy AttemptService attemptService,
-                                 SecretsProvider secrets, EventLog events, QueuePilotProperties properties, Clock clock) {
+                                 EventLog events, QueuePilotProperties properties, Clock clock) {
         this.workers = workers;
         this.attempts = attempts;
         this.attemptService = attemptService;
-        this.secrets = secrets;
         this.events = events;
         this.properties = properties;
         this.clock = clock;
@@ -62,9 +55,6 @@ public class WorkerRegistryService {
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
-        if (request.enrollSecret() == null || !TokenHasher.constantTimeEquals(request.enrollSecret(), secrets.workerSecret())) {
-            throw new ForbiddenException("Invalid enrollment secret");
-        }
         List<ValidationError> errors = new ArrayList<>();
         if (request.name() == null || !NAME.matcher(request.name()).matches()) {
             errors.add(new ValidationError("name", "must be 1-64 characters from A-Z a-z 0-9 . _ -"));
@@ -75,28 +65,18 @@ public class WorkerRegistryService {
         if (request.demoPaceMs() < 0 || request.demoPaceMs() > 10_000) {
             errors.add(new ValidationError("demoPaceMs", "must be 0..10000"));
         }
-        Set<String> capabilities = checkedSet(request.capabilities(), CAPABILITY, "capabilities", errors);
-        Set<String> tasks = checkedSet(request.supportedTasks(), TASK_ID, "supportedTasks", errors);
+        Set<String> tasks = checkedSet(request.supportedTasks(), TASK_TYPE, "supportedTasks", errors);
         if (!errors.isEmpty()) {
             throw new ValidationException(errors);
         }
 
-        String token = TokenHasher.newToken();
         WorkerEntity worker = new WorkerEntity("w-" + UUID.randomUUID().toString().substring(0, 8), request.name(),
-                request.concurrencyLimit(), capabilities, tasks, TokenHasher.hash(token), request.demoPaceMs(), clock.instant());
+                request.concurrencyLimit(), tasks, request.demoPaceMs(), clock.instant());
         workers.save(worker);
         events.record(EventType.WORKER_REGISTERED, null, worker.getId(), null, "Worker " + worker.getName() + " ("
-                + worker.getId() + ") registered with " + request.concurrencyLimit() + " slots, capabilities "
-                + capabilities + ", tasks " + tasks
+                + worker.getId() + ") registered with " + request.concurrencyLimit() + " slots, tasks " + tasks
                 + (request.demoPaceMs() > 0 ? ", demo pacing " + request.demoPaceMs() + " ms per percent" : ""));
-        return new RegisterResponse(worker.getId(), token, properties.heartbeatIntervalMs(),
-                properties.leaseDurationMs(), properties.claimPollMs());
-    }
-
-    /** Maps a bearer token to a worker id; used by the security filter. */
-    @Transactional(readOnly = true)
-    public Optional<String> authenticate(String token) {
-        return workers.findByTokenHash(TokenHasher.hash(token)).map(WorkerEntity::getId);
+        return new RegisterResponse(worker.getId(), properties.heartbeatIntervalMs());
     }
 
     @Transactional(readOnly = true)
@@ -186,7 +166,7 @@ public class WorkerRegistryService {
         for (Object[] row : attempts.countByWorkerAndState()) {
             counts.computeIfAbsent((String) row[0], id -> new HashMap<>()).put((AttemptState) row[1], (Long) row[2]);
         }
-        return workers.findAllByOrderByRegisteredAtDesc().stream()
+        return workers.findAllByOrderByNameAsc().stream()
                 .map(w -> WorkerView.from(w, counts.getOrDefault(w.getId(), Map.of()),
                         attempts.findByWorkerIdAndState(w.getId(), AttemptState.RUNNING)))
                 .toList();

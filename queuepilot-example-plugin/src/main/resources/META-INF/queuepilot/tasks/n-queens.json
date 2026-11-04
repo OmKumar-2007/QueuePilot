@@ -1,24 +1,25 @@
 {
   "taskType": "n-queens",
-  "version": "1.0.0",
   "displayName": "N-Queens solver",
   "description": "Places n queens on an n x n board so none attack each other: counts every solution and shows the first one. Set requireSolution to fail when no solution exists (n = 2 or 3).",
-  "executorKind": "JAVA_PLUGIN",
-  "requiredCapabilities": ["cpu"],
   "inputSchema": {
     "fields": [
-      { "name": "n", "type": "INTEGER", "required": true, "min": 1, "max": 16, "description": "Board size (number of queens)" },
-      { "name": "requireSolution", "type": "BOOLEAN", "required": false, "description": "Fail the job if the board has no solution" }
+      {
+        "name": "n",
+        "type": "INTEGER",
+        "required": true,
+        "min": 1,
+        "max": 16,
+        "description": "Board size (number of queens)"
+      },
+      {
+        "name": "requireSolution",
+        "type": "BOOLEAN",
+        "required": false,
+        "description": "Fail the job if the board has no solution"
+      }
     ]
   },
-  "outputSchema": {
-    "fields": [
-      { "name": "solutionCount", "type": "INTEGER" },
-      { "name": "firstSolution", "type": "INTEGER_LIST" },
-      { "name": "board", "type": "STRING_LIST" }
-    ]
-  },
-  "resources": { "cpuMillis": 1000, "memoryMb": 128 },
   "timeoutSeconds": 300,
   "maxRetries": 2,
   "defaultPriority": 5,

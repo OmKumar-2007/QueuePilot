@@ -20,9 +20,6 @@ public interface JobRepository extends JpaRepository<JobEntity, String> {
 
     List<JobEntity> findByStateOrderBySubmittedAtAsc(JobState state, Pageable pageable);
 
-    @Query("select j.id from JobEntity j where j.state = com.queuepilot.core.job.JobState.SCHEDULED and j.startAt <= :now")
-    List<String> findDueScheduledIds(@Param("now") Instant now);
-
     @Query("select j from JobEntity j join j.prerequisiteIds p where p = :prerequisiteId")
     List<JobEntity> findDependants(@Param("prerequisiteId") String prerequisiteId);
 
@@ -32,8 +29,6 @@ public interface JobRepository extends JpaRepository<JobEntity, String> {
             + "com.queuepilot.core.job.JobState.FAILED, com.queuepilot.core.job.JobState.CANCELLED, "
             + "com.queuepilot.core.job.JobState.SKIPPED)")
     long countBrokenAmong(@Param("ids") Collection<String> ids);
-
-    long countByClientIdAndStateIn(String clientId, Collection<JobState> states);
 
     List<JobEntity> findAllByOrderBySubmittedAtDesc(Pageable pageable);
 
@@ -47,12 +42,6 @@ public interface JobRepository extends JpaRepository<JobEntity, String> {
     @Query("select j from JobEntity j where j.state = com.queuepilot.core.job.JobState.SUCCEEDED "
             + "and j.finishedAt >= :since order by j.finishedAt desc")
     List<JobEntity> findSucceededSince(@Param("since") Instant since, Pageable pageable);
-
-    @Query("select j from JobEntity j where j.deadlineAt is not null and j.state not in ("
-            + "com.queuepilot.core.job.JobState.SUCCEEDED, com.queuepilot.core.job.JobState.FAILED, "
-            + "com.queuepilot.core.job.JobState.CANCELLED, com.queuepilot.core.job.JobState.SKIPPED) "
-            + "and j.deadlineAt <= :horizon order by j.deadlineAt asc")
-    List<JobEntity> findActiveWithDeadlineBefore(@Param("horizon") Instant horizon);
 
     /**
      * Progress is written with a conditional bulk update: it only applies while the attempt is

@@ -4,7 +4,6 @@ import com.queuepilot.coordinator.attempt.AttemptEntity;
 import com.queuepilot.coordinator.attempt.AttemptRepository;
 import com.queuepilot.coordinator.attempt.AttemptService;
 import com.queuepilot.coordinator.config.QueuePilotProperties;
-import com.queuepilot.coordinator.job.JobService;
 import com.queuepilot.coordinator.worker.WorkerRegistryService;
 import com.queuepilot.coordinator.worker.WorkerRepository;
 import com.queuepilot.core.job.AttemptState;
@@ -21,7 +20,6 @@ import java.util.function.Consumer;
 /**
  * Periodic housekeeping (U5, F10, F11, F13, F18). Each pass:
  * <ol>
- *   <li>releases SCHEDULED jobs whose start time has come,</li>
  *   <li>marks workers without recent heartbeats OFFLINE and abandons their attempts,</li>
  *   <li>expires attempts whose lease ran out,</li>
  *   <li>times out attempts that run longer than their task allows.</li>
@@ -34,7 +32,6 @@ public class RecoveryMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(RecoveryMonitor.class);
 
-    private final JobService jobService;
     private final WorkerRegistryService workerRegistry;
     private final AttemptService attemptService;
     private final WorkerRepository workers;
@@ -42,9 +39,8 @@ public class RecoveryMonitor {
     private final QueuePilotProperties properties;
     private final Clock clock;
 
-    public RecoveryMonitor(JobService jobService, WorkerRegistryService workerRegistry, AttemptService attemptService,
+    public RecoveryMonitor(WorkerRegistryService workerRegistry, AttemptService attemptService,
                            WorkerRepository workers, AttemptRepository attempts, QueuePilotProperties properties, Clock clock) {
-        this.jobService = jobService;
         this.workerRegistry = workerRegistry;
         this.attemptService = attemptService;
         this.workers = workers;
@@ -62,7 +58,6 @@ public class RecoveryMonitor {
 
     public void runOnce() {
         Instant now = clock.instant();
-        forEach(jobService.promoteScheduledCandidates(now), jobService::promoteScheduled, "promote scheduled job");
         forEach(workers.findSilentWorkerIds(now.minusMillis(properties.workerTimeoutMs())),
                 workerRegistry::markOfflineIfSilent, "mark worker offline");
         forEach(attempts.findExpiredLeaseIds(now), attemptService::expireLeaseIfDue, "expire lease");

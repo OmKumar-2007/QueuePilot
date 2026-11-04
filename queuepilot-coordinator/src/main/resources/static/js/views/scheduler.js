@@ -14,18 +14,16 @@ const POLICIES = {
 function settingsForm(settings) {
     const interval = h('input', { type: 'number', min: 1, max: 3600, value: settings.agingIntervalSeconds });
     const step = h('input', { type: 'number', min: 0, max: 10, value: settings.agingStep });
-    const quota = h('input', { type: 'number', min: 1, value: settings.maxActiveJobsPerClient });
     return h('details', { class: 'section' }, h('summary', {}, 'Settings'),
         h('div', { class: 'card' },
             h('div', { class: 'form-grid' },
                 h('div', { class: 'field' }, h('label', {}, 'Aging interval (seconds)'), interval),
-                h('div', { class: 'field' }, h('label', {}, 'Priority gained per interval'), step),
-                h('div', { class: 'field' }, h('label', {}, 'Max active jobs per client'), quota)),
+                h('div', { class: 'field' }, h('label', {}, 'Priority gained per interval'), step)),
             h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Queues always take turns (round-robin).'), h('span', { class: 'spacer' }),
                 h('button', {
                     class: 'button secondary', onclick: () => act(() => api.put('/api/admin/scheduler', {
                         activePolicy: settings.activePolicy, agingIntervalSeconds: Number(interval.value),
-                        agingStep: Number(step.value), maxActiveJobsPerClient: Number(quota.value),
+                        agingStep: Number(step.value),
                     }), 'Settings saved').then(draw),
                 }, 'Save'))));
 }

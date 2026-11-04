@@ -10,13 +10,13 @@ const TEMPLATE = {
     name: 'Report pipeline',
     queue: 'pipelines',
     steps: [
-        { key: 'ingest', name: 'Ingest: sort raw readings', taskType: 'sorting', input: { count: 2000000 }, dependsOn: [] },
-        { key: 'validate', name: 'Validate notes', taskType: 'text-analysis', input: { text: 'Readings ingested. Values sorted. Ready for analysis.' }, dependsOn: ['ingest'] },
-        { key: 'simulate_a', name: 'Simulate A', taskType: 'monte-carlo-pi', input: { samples: 80000000, seed: 1 }, dependsOn: ['validate'] },
-        { key: 'simulate_b', name: 'Simulate B', taskType: 'monte-carlo-pi', input: { samples: 80000000, seed: 2 }, dependsOn: ['validate'] },
-        { key: 'simulate_c', name: 'Simulate C', taskType: 'monte-carlo-pi', input: { samples: 80000000, seed: 3 }, dependsOn: ['validate'] },
-        { key: 'combine', name: 'Combine results', taskType: 'sorting', input: { count: 500000, algorithm: 'HEAP' }, dependsOn: ['simulate_a', 'simulate_b', 'simulate_c'] },
-        { key: 'verify', name: 'Verify package', taskType: 'text-analysis', input: { text: 'All simulations combined. Package verified.' }, dependsOn: ['combine'] },
+        { key: 'ingest', taskType: 'sorting', input: { count: 2000000 }, dependsOn: [] },
+        { key: 'validate', taskType: 'text-analysis', input: { text: 'Readings ingested. Values sorted. Ready for analysis.' }, dependsOn: ['ingest'] },
+        { key: 'simulate_a', taskType: 'monte-carlo-pi', input: { samples: 80000000, seed: 1 }, dependsOn: ['validate'] },
+        { key: 'simulate_b', taskType: 'monte-carlo-pi', input: { samples: 80000000, seed: 2 }, dependsOn: ['validate'] },
+        { key: 'simulate_c', taskType: 'monte-carlo-pi', input: { samples: 80000000, seed: 3 }, dependsOn: ['validate'] },
+        { key: 'combine', taskType: 'sorting', input: { count: 500000, algorithm: 'HEAP' }, dependsOn: ['simulate_a', 'simulate_b', 'simulate_c'] },
+        { key: 'verify', taskType: 'text-analysis', input: { text: 'All simulations combined. Package verified.' }, dependsOn: ['combine'] },
     ],
 };
 
@@ -50,7 +50,7 @@ function dagView(workflow) {
         const group = svg('g', { class: 'node', transform: `translate(${p.x},${p.y})`, style: 'cursor:pointer' },
             svg('rect', { width: W, height: H, rx: 10, stroke: color }),
             svg('rect', { width: Math.max(0, (W - 2) * n.progressPercent / 100), height: 4, x: 1, y: H - 5, rx: 2, fill: color }),
-            svg('text', { x: 12, y: 21, 'font-weight': '600' }, (n.name || n.step).slice(0, 22)),
+            svg('text', { x: 12, y: 21, 'font-weight': '600' }, n.step.slice(0, 22)),
             svg('text', { x: 12, y: 39, fill: color }, `${n.state.toLowerCase()} · ${n.progressPercent}%`));
         group.addEventListener('click', () => openJob(n.jobId));
         return group;

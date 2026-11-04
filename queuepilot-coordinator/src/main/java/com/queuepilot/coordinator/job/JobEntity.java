@@ -1,7 +1,5 @@
 package com.queuepilot.coordinator.job;
 
-import com.queuepilot.coordinator.task.ExecutorKind;
-import com.queuepilot.coordinator.task.TaskDefinitionEntity;
 import com.queuepilot.core.job.JobState;
 import com.queuepilot.core.job.JobStateMachine;
 import com.queuepilot.core.job.RetryPolicy;
@@ -39,17 +37,10 @@ public class JobEntity {
 
     @Id
     private String id;
-    private String name;
-    private String taskDefinitionId;
     private String taskType;
-    private String taskVersion;
-    @Enumerated(EnumType.STRING)
-    private ExecutorKind executorKind;
-    private String requiredCapabilities;
     private String workflowId;
     private String workflowStep;
     private String queueName;
-    private String clientId;
     @Enumerated(EnumType.STRING)
     private JobState state;
     private int priority;
@@ -57,19 +48,14 @@ public class JobEntity {
     private String inputJson;
     private String outputJson;
     private String outputArtifactIds;
-    private String errorCode;
-    private String errorMessage;
+    private String error;
     private int progressPercent;
     private String progressMessage;
     private String currentAttemptId;
     private String currentWorkerId;
     private int attemptsUsed;
-    private int maxRetries;
-    private int timeoutSeconds;
     private Instant submittedAt;
-    private Instant startAt;
     private Instant readyAt;
-    private Instant deadlineAt;
     private Instant startedAt;
     private Instant finishedAt;
     @Version
@@ -83,47 +69,34 @@ public class JobEntity {
     protected JobEntity() {
     }
 
-    public JobEntity(String id, NewJob spec, TaskDefinitionEntity task, Instant now) {
+    public JobEntity(String id, NewJob spec, Instant now) {
         this.id = id;
-        this.name = spec.name();
-        this.taskDefinitionId = task.getId();
-        this.taskType = task.getTaskType();
-        this.taskVersion = task.getVersion();
-        this.executorKind = task.getExecutorKind();
-        this.requiredCapabilities = task.getRequiredCapabilities();
+        this.taskType = spec.taskType();
         this.workflowId = spec.workflowId();
         this.workflowStep = spec.workflowStep();
         this.queueName = spec.queue();
-        this.clientId = spec.clientId();
         this.priority = spec.priority();
         this.estimatedMs = spec.estimatedMs();
         this.inputJson = spec.inputJson();
-        this.maxRetries = task.getMaxRetries();
-        this.timeoutSeconds = task.getTimeoutSeconds();
         this.submittedAt = now;
-        this.startAt = spec.startAt();
-        this.deadlineAt = spec.deadline();
         this.prerequisiteIds = new HashSet<>(spec.prerequisiteIds());
         this.state = spec.initialState();
         this.readyAt = spec.initialState() == JobState.QUEUED ? now : null;
         this.progressMessage = switch (spec.initialState()) {
-            case SCHEDULED -> "Scheduled for " + spec.startAt();
             case BLOCKED -> "Waiting for prerequisites";
             case QUEUED -> "Waiting for a worker";
             case SKIPPED -> "Skipped: a prerequisite did not succeed";
             default -> throw new IllegalArgumentException("Invalid initial state " + spec.initialState());
         };
         if (spec.initialState() == JobState.SKIPPED) {
-            this.errorCode = "UPSTREAM_FAILED";
-            this.errorMessage = "A prerequisite had already failed or was cancelled";
+            this.error = "UPSTREAM_FAILED: a prerequisite had already failed or was cancelled";
             this.finishedAt = now;
         }
     }
 
     /** Everything needed to create a job, already validated by {@link JobService}. */
-    public record NewJob(String name, String queue, String clientId, int priority, long estimatedMs, String inputJson,
-                         Instant startAt, Instant deadline, Set<String> prerequisiteIds, String workflowId,
-                         String workflowStep, JobState initialState) {
+    public record NewJob(String taskType, String queue, int priority, long estimatedMs, String inputJson,
+                         Set<String> prerequisiteIds, String workflowId, String workflowStep, JobState initialState) {
     }
 
     private void moveTo(JobState next) {
@@ -131,17 +104,11 @@ public class JobEntity {
         state = next;
     }
 
-    /** SCHEDULED/BLOCKED -> QUEUED once start time and prerequisites allow it. */
+    /** BLOCKED -> QUEUED once all prerequisites have succeeded. */
     public void release(Instant now) {
         moveTo(JobState.QUEUED);
         readyAt = now;
         progressMessage = "Waiting for a worker";
-    }
-
-    /** SCHEDULED -> BLOCKED when the start time arrives but prerequisites are not done. */
-    public void block() {
-        moveTo(JobState.BLOCKED);
-        progressMessage = "Waiting for prerequisites";
     }
 
     public void start(String attemptId, String workerId, Instant now) {
@@ -160,32 +127,29 @@ public class JobEntity {
         moveTo(JobState.SUCCEEDED);
         this.outputJson = outputJson;
         this.outputArtifactIds = outputArtifactIds;
-        this.errorCode = null;
-        this.errorMessage = null;
+        this.error = null;
         this.finishedAt = now;
         this.progressPercent = 100;
         this.progressMessage = "Completed";
     }
 
     /** RUNNING -> QUEUED with a retry delay. */
-    public void retryLater(Instant readyAt, String code, String message) {
+    public void retryLater(Instant readyAt, String error, int maxRetries) {
         moveTo(JobState.QUEUED);
         this.readyAt = readyAt;
-        this.errorCode = code;
-        this.errorMessage = message;
+        this.error = error;
         this.currentAttemptId = null;
         this.currentWorkerId = null;
         this.progressPercent = 0;
-        this.progressMessage = "Retry " + attemptsUsed + "/" + maxRetries + " after: " + code;
+        this.progressMessage = "Retry " + attemptsUsed + "/" + maxRetries + " after: " + error;
     }
 
-    public void fail(String code, String message, Instant now) {
+    public void fail(String error, Instant now) {
         moveTo(JobState.FAILED);
-        this.errorCode = code;
-        this.errorMessage = message;
+        this.error = error;
         this.currentWorkerId = null;
         this.finishedAt = now;
-        this.progressMessage = "Failed: " + code;
+        this.progressMessage = "Failed";
     }
 
     public void cancel(Instant now) {
@@ -196,8 +160,7 @@ public class JobEntity {
 
     public void skip(String reason, Instant now) {
         moveTo(JobState.SKIPPED);
-        this.errorCode = "UPSTREAM_FAILED";
-        this.errorMessage = reason;
+        this.error = "UPSTREAM_FAILED: " + reason;
         this.finishedAt = now;
         this.progressMessage = "Skipped";
     }
@@ -206,16 +169,13 @@ public class JobEntity {
         return state == JobState.RUNNING && attemptId != null && attemptId.equals(currentAttemptId);
     }
 
-    public boolean canRetry() {
+    public boolean canRetry(int maxRetries) {
         return RetryPolicy.canRetry(attemptsUsed, maxRetries);
     }
 
-    public String taskIdentifier() {
-        return taskType + "@" + taskVersion;
-    }
-
-    public Set<String> requiredCapabilitySet() {
-        return TaskDefinitionEntity.splitCsv(requiredCapabilities);
+    /** Short readable name for logs and events, e.g. {@code sorting #1a2b3c4d}. */
+    public String label() {
+        return taskType + " #" + id.substring(0, Math.min(8, id.length()));
     }
 
     public SchedulableJob toSchedulable() {
@@ -223,34 +183,24 @@ public class JobEntity {
     }
 
     public String getId() { return id; }
-    public String getName() { return name; }
-    public String getTaskDefinitionId() { return taskDefinitionId; }
     public String getTaskType() { return taskType; }
-    public String getTaskVersion() { return taskVersion; }
-    public ExecutorKind getExecutorKind() { return executorKind; }
     public String getWorkflowId() { return workflowId; }
     public String getWorkflowStep() { return workflowStep; }
     public String getQueueName() { return queueName; }
-    public String getClientId() { return clientId; }
     public JobState getState() { return state; }
     public int getPriority() { return priority; }
     public long getEstimatedMs() { return estimatedMs; }
     public String getInputJson() { return inputJson; }
     public String getOutputJson() { return outputJson; }
     public String getOutputArtifactIds() { return outputArtifactIds; }
-    public String getErrorCode() { return errorCode; }
-    public String getErrorMessage() { return errorMessage; }
+    public String getError() { return error; }
     public int getProgressPercent() { return progressPercent; }
     public String getProgressMessage() { return progressMessage; }
     public String getCurrentAttemptId() { return currentAttemptId; }
     public String getCurrentWorkerId() { return currentWorkerId; }
     public int getAttemptsUsed() { return attemptsUsed; }
-    public int getMaxRetries() { return maxRetries; }
-    public int getTimeoutSeconds() { return timeoutSeconds; }
     public Instant getSubmittedAt() { return submittedAt; }
-    public Instant getStartAt() { return startAt; }
     public Instant getReadyAt() { return readyAt; }
-    public Instant getDeadlineAt() { return deadlineAt; }
     public Instant getStartedAt() { return startedAt; }
     public Instant getFinishedAt() { return finishedAt; }
     public Set<String> getPrerequisiteIds() { return Collections.unmodifiableSet(prerequisiteIds); }

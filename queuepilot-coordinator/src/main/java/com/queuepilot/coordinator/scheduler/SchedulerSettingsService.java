@@ -29,8 +29,7 @@ public class SchedulerSettingsService {
         this.events = events;
     }
 
-    public record SchedulerSettings(PolicyType activePolicy, int agingIntervalSeconds, int agingStep,
-                                    int maxActiveJobsPerClient) {
+    public record SchedulerSettings(PolicyType activePolicy, int agingIntervalSeconds, int agingStep) {
     }
 
     private record Snapshot(SchedulerSettings settings, SchedulingPolicy policy) {
@@ -56,18 +55,13 @@ public class SchedulerSettingsService {
         if (requested.agingStep() < 0 || requested.agingStep() > 10) {
             errors.add(new ValidationError("agingStep", "must be 0..10"));
         }
-        if (requested.maxActiveJobsPerClient() < 1 || requested.maxActiveJobsPerClient() > 100_000) {
-            errors.add(new ValidationError("maxActiveJobsPerClient", "must be 1..100000"));
-        }
         if (!errors.isEmpty()) {
             throw new ValidationException(errors);
         }
         SchedulerSettingsEntity entity = repository.findById(SchedulerSettingsEntity.SINGLETON_ID).orElseThrow();
-        entity.update(requested.activePolicy(), requested.agingIntervalSeconds(), requested.agingStep(),
-                requested.maxActiveJobsPerClient());
+        entity.update(requested.activePolicy(), requested.agingIntervalSeconds(), requested.agingStep());
         events.record(EventType.SCHEDULER_UPDATED, null, null, null, "Scheduler set to " + requested.activePolicy()
-                + " (aging " + requested.agingStep() + " per " + requested.agingIntervalSeconds() + "s, client limit "
-                + requested.maxActiveJobsPerClient() + ")");
+                + " (aging " + requested.agingStep() + " per " + requested.agingIntervalSeconds() + "s)");
         cached = build(entity);
         return cached.settings();
     }
@@ -82,8 +76,7 @@ public class SchedulerSettingsService {
     }
 
     private static Snapshot build(SchedulerSettingsEntity e) {
-        SchedulerSettings settings = new SchedulerSettings(e.getActivePolicy(), e.getAgingIntervalSeconds(),
-                e.getAgingStep(), e.getMaxActiveJobsPerClient());
+        SchedulerSettings settings = new SchedulerSettings(e.getActivePolicy(), e.getAgingIntervalSeconds(), e.getAgingStep());
         return new Snapshot(settings, e.getActivePolicy().create(Duration.ofSeconds(e.getAgingIntervalSeconds()), e.getAgingStep()));
     }
 

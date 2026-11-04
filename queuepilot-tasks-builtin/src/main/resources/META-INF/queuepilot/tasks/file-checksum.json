@@ -1,23 +1,28 @@
 {
   "taskType": "file-checksum",
-  "version": "1.0.0",
   "displayName": "File checksum",
   "description": "Computes the SHA-256, SHA-1 or MD5 digest of an uploaded file.",
-  "executorKind": "JAVA_PLUGIN",
-  "requiredCapabilities": ["io"],
   "inputSchema": {
     "fields": [
-      { "name": "file", "type": "FILE", "required": true, "description": "File to hash" },
-      { "name": "algorithm", "type": "ENUM", "required": false, "values": ["SHA-256", "SHA-1", "MD5"], "description": "Digest algorithm (default SHA-256)" }
+      {
+        "name": "file",
+        "type": "FILE",
+        "required": true,
+        "description": "File to hash"
+      },
+      {
+        "name": "algorithm",
+        "type": "ENUM",
+        "required": false,
+        "values": [
+          "SHA-256",
+          "SHA-1",
+          "MD5"
+        ],
+        "description": "Digest algorithm (default SHA-256)"
+      }
     ]
   },
-  "outputSchema": {
-    "fields": [
-      { "name": "digest", "type": "STRING" },
-      { "name": "sizeBytes", "type": "INTEGER" }
-    ]
-  },
-  "resources": { "cpuMillis": 500, "memoryMb": 128 },
   "timeoutSeconds": 300,
   "maxRetries": 3,
   "defaultPriority": 5,

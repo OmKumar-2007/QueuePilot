@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -30,32 +29,21 @@ class TaskRegistryAndArtifactTest extends CoordinatorTestBase {
     void builtinTasksAreSeededAndListed() throws Exception {
         JsonNode tasks = body(mvc.perform(get("/api/tasks")).andExpect(status().isOk()).andReturn());
         List<String> ids = new java.util.ArrayList<>();
-        tasks.forEach(task -> ids.add(task.get("identifier").asText()));
+        tasks.forEach(task -> ids.add(task.get("taskType").asText()));
         assertThat(ids).containsAll(ALL_BUILTINS);
     }
 
     @Test
-    void adminEndpointsRequireValidCredentials() throws Exception {
-        mvc.perform(post("/api/admin/tasks").contentType("application/json").content(primeSieveManifest()))
-                .andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/admin/tasks").with(httpBasic("admin", "wrong")).contentType("application/json")
-                .content(primeSieveManifest())).andExpect(status().isUnauthorized());
-    }
-
-    @Test
     void newTaskTypeBecomesRunnableWithoutAnyCodeChange() throws Exception {
-        JsonNode registered = body(mvc.perform(asAdmin(post("/api/admin/tasks")).contentType("application/json")
-                .content(primeSieveManifest())).andExpect(status().isCreated()).andReturn());
-        assertThat(registered.get("enabled").asBoolean()).isFalse();
-
         Map<String, Object> job = Map.of("taskType", "prime-sieve", "input", Map.of("limit", 1000));
         postJson("/api/jobs", job).andExpect(status().isBadRequest());
 
-        mvc.perform(asAdmin(post("/api/admin/tasks/" + registered.get("id").asText() + "/enable"))).andExpect(status().isOk());
+        mvc.perform(post("/api/admin/tasks").contentType("application/json").content(primeSieveManifest()))
+                .andExpect(status().isCreated());
         String jobId = submitId(new java.util.HashMap<>(job));
 
         Worker builtinsOnly = generalWorker("old-worker");
-        Worker withPlugin = registerWorker("plugin-worker", 2, List.of("cpu"), List.of("prime-sieve@1.0.0"));
+        Worker withPlugin = registerWorker("plugin-worker", 2, List.of("prime-sieve"));
         assertThat(claim(builtinsOnly)).isNull();
         JsonNode assignment = claim(withPlugin);
         assertThat(assignment.get("jobId").asText()).isEqualTo(jobId);
@@ -63,20 +51,18 @@ class TaskRegistryAndArtifactTest extends CoordinatorTestBase {
     }
 
     @Test
-    void registeredVersionsAreImmutableAndContainerTasksMustBePinned() throws Exception {
-        mvc.perform(asAdmin(post("/api/admin/tasks")).contentType("application/json").content(primeSieveManifest()))
+    void taskTypesAreUniqueAndManifestsAreValidated() throws Exception {
+        mvc.perform(post("/api/admin/tasks").contentType("application/json").content(primeSieveManifest()))
                 .andExpect(status().isCreated());
-        mvc.perform(asAdmin(post("/api/admin/tasks")).contentType("application/json").content(primeSieveManifest()))
+        mvc.perform(post("/api/admin/tasks").contentType("application/json").content(primeSieveManifest()))
                 .andExpect(status().isConflict());
 
-        String container = """
-                {"taskType": "python-stats", "version": "1.0.0", "displayName": "Python", "executorKind": "CONTAINER",
-                 "requiredCapabilities": [], "resources": {"cpuMillis": 500, "memoryMb": 128}, "timeoutSeconds": 30,
-                 "maxRetries": 1, "defaultPriority": 5, "defaultEstimatedMs": 1000,
-                 "container": {"image": "python:latest", "command": ["python", "/app/run.py"]}}""";
-        mvc.perform(asAdmin(post("/api/admin/tasks")).contentType("application/json").content(container))
+        String invalid = """
+                {"taskType": "Bad Name", "displayName": "Bad", "timeoutSeconds": 30,
+                 "maxRetries": 1, "defaultPriority": 5, "defaultEstimatedMs": 1000}""";
+        mvc.perform(post("/api/admin/tasks").contentType("application/json").content(invalid))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors[0].field").value("container.image"));
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("taskType"));
     }
 
     @Test
@@ -94,26 +80,24 @@ class TaskRegistryAndArtifactTest extends CoordinatorTestBase {
 
         Worker worker = generalWorker("w");
         JsonNode assignment = claim(worker);
-        assertThat(assignment.get("inputArtifactIds").get(0).asText()).isEqualTo(artifactId);
+        assertThat(assignment.get("input").get("file").asText()).isEqualTo(artifactId);
         String attemptPath = "/api/worker/attempts/" + assignment.get("attemptId").asText();
-        String token = assignment.get("fencingToken").asText();
 
-        byte[] downloaded = mvc.perform(get(attemptPath + "/artifacts/" + artifactId)
-                        .header("Authorization", "Bearer " + worker.token()).header("X-Fencing-Token", token))
+        byte[] downloaded = mvc.perform(get(attemptPath + "/artifacts/" + artifactId).header("X-Worker-Id", worker.id()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         assertThat(downloaded).isEqualTo(content);
-        mvc.perform(get(attemptPath + "/artifacts/" + artifactId)
-                        .header("Authorization", "Bearer " + worker.token()).header("X-Fencing-Token", "wrong"))
+        Worker other = generalWorker("other");
+        mvc.perform(get(attemptPath + "/artifacts/" + artifactId).header("X-Worker-Id", other.id()))
                 .andExpect(status().isConflict());
 
         JsonNode output = body(mvc.perform(multipart(attemptPath + "/artifacts")
                         .file(new MockMultipartFile("file", "report.csv", "text/csv", "a,b\n".getBytes()))
-                        .header("Authorization", "Bearer " + worker.token()).header("X-Fencing-Token", token))
+                        .header("X-Worker-Id", worker.id()))
                 .andExpect(status().isCreated()).andReturn());
         String outputId = output.get("id").asText();
 
         workerPost(worker, "/attempts/" + assignment.get("attemptId").asText() + "/complete",
-                Map.of("fencingToken", token, "output", Map.of("digest", "abc"), "outputArtifactIds", List.of(outputId)))
+                Map.of("output", Map.of("digest", "abc"), "outputArtifactIds", List.of(outputId)))
                 .andExpect(status().isOk());
         assertThat(job(jobId).get("outputArtifactIds").asText()).isEqualTo(outputId);
         assertThat(mvc.perform(get("/api/artifacts/" + outputId + "/content")).andExpect(status().isOk())
@@ -121,10 +105,9 @@ class TaskRegistryAndArtifactTest extends CoordinatorTestBase {
     }
 
     @Test
-    void benchmarkReportsAreImportedByAdminsAndListedPublicly() throws Exception {
+    void benchmarkReportsAreImportedAndListed() throws Exception {
         Map<String, Object> report = Map.of("kind", "SIMULATED", "name", "unit", "config", Map.of("seed", 1),
                 "environment", Map.of(), "summary", Map.of("scenarios", List.of()));
-        postJson("/api/admin/benchmarks", report).andExpect(status().isUnauthorized());
         adminPost("/api/admin/benchmarks", report).andExpect(status().isCreated());
         mvc.perform(get("/api/benchmarks")).andExpect(jsonPath("$[0].kind").value("SIMULATED"));
         adminPost("/api/admin/benchmarks", Map.of("kind", "MADE_UP", "name", "x", "summary", Map.of()))

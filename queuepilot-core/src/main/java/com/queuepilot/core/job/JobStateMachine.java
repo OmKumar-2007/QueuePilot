@@ -10,7 +10,6 @@ import static com.queuepilot.core.job.JobState.CANCELLED;
 import static com.queuepilot.core.job.JobState.FAILED;
 import static com.queuepilot.core.job.JobState.QUEUED;
 import static com.queuepilot.core.job.JobState.RUNNING;
-import static com.queuepilot.core.job.JobState.SCHEDULED;
 import static com.queuepilot.core.job.JobState.SKIPPED;
 import static com.queuepilot.core.job.JobState.SUCCEEDED;
 
@@ -23,7 +22,6 @@ public final class JobStateMachine {
     private static final Map<JobState, Set<JobState>> ALLOWED = new EnumMap<>(JobState.class);
 
     static {
-        ALLOWED.put(SCHEDULED, EnumSet.of(QUEUED, BLOCKED, SKIPPED, CANCELLED));
         ALLOWED.put(BLOCKED, EnumSet.of(QUEUED, SKIPPED, CANCELLED));
         ALLOWED.put(QUEUED, EnumSet.of(RUNNING, CANCELLED));
         // RUNNING -> QUEUED is a retry after a failed, expired or timed-out attempt.

@@ -1,26 +1,32 @@
 {
   "taskType": "text-analysis",
-  "version": "1.0.0",
   "displayName": "Text analysis",
   "description": "Counts lines, words, sentences and word frequencies of inline text or an uploaded file; outputs a CSV frequency table.",
-  "executorKind": "JAVA_PLUGIN",
-  "requiredCapabilities": ["text"],
   "inputSchema": {
     "fields": [
-      { "name": "text", "type": "STRING", "required": false, "maxLength": 60000, "description": "Inline text (use 'file' for large inputs)" },
-      { "name": "file", "type": "FILE", "required": false, "description": "Uploaded UTF-8 text file" },
-      { "name": "topN", "type": "INTEGER", "required": false, "min": 1, "max": 100, "description": "How many top words to return (default 10)" }
+      {
+        "name": "text",
+        "type": "STRING",
+        "required": false,
+        "maxLength": 60000,
+        "description": "Inline text (use 'file' for large inputs)"
+      },
+      {
+        "name": "file",
+        "type": "FILE",
+        "required": false,
+        "description": "Uploaded UTF-8 text file"
+      },
+      {
+        "name": "topN",
+        "type": "INTEGER",
+        "required": false,
+        "min": 1,
+        "max": 100,
+        "description": "How many top words to return (default 10)"
+      }
     ]
   },
-  "outputSchema": {
-    "fields": [
-      { "name": "wordCount", "type": "INTEGER" },
-      { "name": "uniqueWords", "type": "INTEGER" },
-      { "name": "sentenceCount", "type": "INTEGER" },
-      { "name": "frequencyTableArtifact", "type": "FILE" }
-    ]
-  },
-  "resources": { "cpuMillis": 1000, "memoryMb": 512 },
   "timeoutSeconds": 300,
   "maxRetries": 3,
   "defaultPriority": 5,

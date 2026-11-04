@@ -6,7 +6,5 @@ import java.util.List;
 
 public interface ArtifactRepository extends JpaRepository<ArtifactEntity, String> {
 
-    List<ArtifactEntity> findByJobIdAndRole(String jobId, String role);
-
     List<ArtifactEntity> findByJobId(String jobId);
 }

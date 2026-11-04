@@ -6,12 +6,9 @@ import com.queuepilot.core.protocol.WorkerProtocol.HeartbeatResponse;
 import com.queuepilot.core.protocol.WorkerProtocol.RegisterRequest;
 import com.queuepilot.core.protocol.WorkerProtocol.RegisterResponse;
 import com.queuepilot.worker.WorkerTaskContext.CancelReason;
-import com.queuepilot.worker.container.ContainerTaskRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,7 +36,6 @@ public class WorkerRuntime {
     private final WorkerConfig config;
     private final CoordinatorApi api;
     private final TaskExecutorRegistry registry;
-    private final ContainerTaskRunner containerRunner;
     private final ActiveAttempts active = new ActiveAttempts();
     private final Semaphore slots;
     private final ExecutorService pool;
@@ -47,16 +43,15 @@ public class WorkerRuntime {
     private final AtomicBoolean running = new AtomicBoolean();
     private final PauseGate pauseGate = new PauseGate();
     private volatile long frozenUntilMillis;
-    private volatile long claimPollMs = 1000;
+    /** How long to wait before asking again when there was no work. */
+    private static final long CLAIM_POLL_MS = 1000;
     private volatile String workerId;
     private Thread claimThread;
 
-    public WorkerRuntime(WorkerConfig config, CoordinatorApi api, TaskExecutorRegistry registry,
-                         ContainerTaskRunner containerRunner) {
+    public WorkerRuntime(WorkerConfig config, CoordinatorApi api, TaskExecutorRegistry registry) {
         this.config = config;
         this.api = api;
         this.registry = registry;
-        this.containerRunner = containerRunner;
         this.slots = new Semaphore(config.slots());
         this.pool = Executors.newFixedThreadPool(config.slots(), runnable -> {
             Thread thread = new Thread(runnable, "qp-exec-" + config.name());
@@ -92,24 +87,19 @@ public class WorkerRuntime {
     }
 
     private RegisterResponse registerWithRetry() throws InterruptedException {
-        List<String> capabilities = new ArrayList<>(config.capabilities());
-        if (containerRunner != null && !capabilities.contains("docker")) {
-            capabilities.add("docker");
-        }
-        RegisterRequest request = new RegisterRequest(config.name(), config.slots(), capabilities,
-                registry.identifiers(), config.enrollSecret(), config.paceMsPerPercent());
+        RegisterRequest request = new RegisterRequest(config.name(), config.slots(), registry.taskTypes(),
+                config.paceMsPerPercent());
         long backoff = 1000;
         while (true) {
             try {
                 RegisterResponse response = api.register(request);
                 workerId = response.workerId();
-                claimPollMs = response.claimPollMs();
-                log.info("Registered as {} ({}) with {} slots; tasks {}; capabilities {}{}", config.name(), workerId,
-                        config.slots(), registry.identifiers(), capabilities,
+                log.info("Registered as {} ({}) with {} slots; tasks {}{}", config.name(), workerId,
+                        config.slots(), registry.taskTypes(),
                         config.paceMsPerPercent() > 0 ? "; DEMO PACING " + config.paceMsPerPercent() + " ms per percent" : "");
                 return response;
             } catch (CoordinatorApi.CoordinatorException e) {
-                if (e.status() == 400 || e.status() == 403) {
+                if (e.status() == 400) {
                     throw new IllegalStateException("Registration rejected: " + e.getMessage());
                 }
                 log.warn("Coordinator not reachable ({}); retrying in {} ms", e.getMessage(), backoff);
@@ -127,10 +117,10 @@ public class WorkerRuntime {
                 Optional<Assignment> assignment = claimSafely();
                 if (assignment.isEmpty()) {
                     slots.release();
-                    Thread.sleep(claimPollMs);
+                    Thread.sleep(CLAIM_POLL_MS);
                     continue;
                 }
-                pool.submit(new AttemptRunner(assignment.get(), registry, containerRunner, api, active, scheduler,
+                pool.submit(new AttemptRunner(assignment.get(), registry, api, active, scheduler,
                         config.workDir(), config.paceMsPerPercent(), pauseGate, slots::release));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -139,15 +129,11 @@ public class WorkerRuntime {
         }
     }
 
-    private Optional<Assignment> claimSafely() throws InterruptedException {
+    private Optional<Assignment> claimSafely() {
         try {
-            return api.claim(slots.availablePermits() + 1);
+            return api.claim();
         } catch (CoordinatorApi.CoordinatorException e) {
-            if (e.status() == 401) {
-                reregister();
-            } else {
-                log.warn("Claim failed: {}", e.getMessage());
-            }
+            log.warn("Claim failed: {}", e.getMessage());
             return Optional.empty();
         }
     }
@@ -157,7 +143,7 @@ public class WorkerRuntime {
             return;
         }
         try {
-            HeartbeatResponse response = api.heartbeat(active.refs());
+            HeartbeatResponse response = api.heartbeat(active.ids());
             response.revoked().forEach(id -> {
                 log.warn("Coordinator revoked attempt {}; stopping it", id);
                 active.cancel(id, CancelReason.REVOKED);

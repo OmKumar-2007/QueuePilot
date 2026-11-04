@@ -3,8 +3,6 @@ package com.queuepilot.worker;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.queuepilot.core.protocol.WorkerProtocol.Assignment;
-import com.queuepilot.core.protocol.WorkerProtocol.AttemptRef;
-import com.queuepilot.core.protocol.WorkerProtocol.ClaimRequest;
 import com.queuepilot.core.protocol.WorkerProtocol.CompletionReport;
 import com.queuepilot.core.protocol.WorkerProtocol.FailureReport;
 import com.queuepilot.core.protocol.WorkerProtocol.HeartbeatRequest;
@@ -30,7 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-/** {@link CoordinatorApi} over HTTP/JSON using the JDK's built-in HttpClient. */
+/** {@link CoordinatorApi} over HTTP/JSON using the JDK's built-in HttpClient. The worker identifies itself with the X-Worker-Id header. */
 public class HttpCoordinatorClient implements CoordinatorApi {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
@@ -38,7 +36,7 @@ public class HttpCoordinatorClient implements CoordinatorApi {
     private final String baseUrl;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    private volatile String workerToken;
+    private volatile String workerId;
 
     public HttpCoordinatorClient(String baseUrl) {
         this.baseUrl = baseUrl;
@@ -46,14 +44,14 @@ public class HttpCoordinatorClient implements CoordinatorApi {
 
     @Override
     public RegisterResponse register(RegisterRequest request) {
-        RegisterResponse response = read(send(jsonPost("/api/worker/register", request, false)), RegisterResponse.class);
-        workerToken = response.workerToken();
+        RegisterResponse response = read(send(jsonPost("/api/worker/register", request)), RegisterResponse.class);
+        workerId = response.workerId();
         return response;
     }
 
     @Override
-    public Optional<Assignment> claim(int freeSlots) {
-        HttpResponse<byte[]> response = send(jsonPost("/api/worker/claim", new ClaimRequest(freeSlots), true));
+    public Optional<Assignment> claim() {
+        HttpResponse<byte[]> response = send(jsonPost("/api/worker/claim", Map.of()));
         if (response.statusCode() == 204) {
             return Optional.empty();
         }
@@ -61,29 +59,29 @@ public class HttpCoordinatorClient implements CoordinatorApi {
     }
 
     @Override
-    public HeartbeatResponse heartbeat(List<AttemptRef> activeAttempts) {
-        return read(send(jsonPost("/api/worker/heartbeat", new HeartbeatRequest(activeAttempts), true)), HeartbeatResponse.class);
+    public HeartbeatResponse heartbeat(List<String> activeAttemptIds) {
+        return read(send(jsonPost("/api/worker/heartbeat", new HeartbeatRequest(activeAttemptIds))), HeartbeatResponse.class);
     }
 
     @Override
     public boolean progress(String attemptId, ProgressReport report) {
-        return accepted(send(jsonPost("/api/worker/attempts/" + attemptId + "/progress", report, true)));
+        return accepted(send(jsonPost("/api/worker/attempts/" + attemptId + "/progress", report)));
     }
 
     @Override
     public boolean complete(String attemptId, CompletionReport report) {
-        return accepted(send(jsonPost("/api/worker/attempts/" + attemptId + "/complete", report, true)));
+        return accepted(send(jsonPost("/api/worker/attempts/" + attemptId + "/complete", report)));
     }
 
     @Override
     public boolean fail(String attemptId, FailureReport report) {
-        return accepted(send(jsonPost("/api/worker/attempts/" + attemptId + "/fail", report, true)));
+        return accepted(send(jsonPost("/api/worker/attempts/" + attemptId + "/fail", report)));
     }
 
     @Override
-    public void downloadInput(String attemptId, String fencingToken, String artifactId, Path target) throws IOException {
-        HttpRequest request = authorized(HttpRequest.newBuilder(uri("/api/worker/attempts/" + attemptId + "/artifacts/" + artifactId)))
-                .header("X-Fencing-Token", fencingToken).GET().build();
+    public void downloadInput(String attemptId, String artifactId, Path target) throws IOException {
+        HttpRequest request = identified(HttpRequest.newBuilder(uri("/api/worker/attempts/" + attemptId + "/artifacts/" + artifactId)))
+                .GET().build();
         try {
             HttpResponse<InputStream> response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
             try (InputStream body = response.body()) {
@@ -99,7 +97,7 @@ public class HttpCoordinatorClient implements CoordinatorApi {
     }
 
     @Override
-    public String uploadOutput(String attemptId, String fencingToken, Path file, String contentType) throws IOException {
+    public String uploadOutput(String attemptId, Path file, String contentType) throws IOException {
         String boundary = "qp-" + UUID.randomUUID();
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         String header = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
@@ -108,8 +106,7 @@ public class HttpCoordinatorClient implements CoordinatorApi {
         body.write(Files.readAllBytes(file));
         body.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = authorized(HttpRequest.newBuilder(uri("/api/worker/attempts/" + attemptId + "/artifacts")))
-                .header("X-Fencing-Token", fencingToken)
+        HttpRequest request = identified(HttpRequest.newBuilder(uri("/api/worker/attempts/" + attemptId + "/artifacts")))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
                 .build();
@@ -122,22 +119,23 @@ public class HttpCoordinatorClient implements CoordinatorApi {
 
     @Override
     public void deregister() {
-        send(jsonPost("/api/worker/deregister", Map.of(), true));
+        send(jsonPost("/api/worker/deregister", Map.of()));
     }
 
-    private HttpRequest jsonPost(String path, Object body, boolean authenticated) {
+    private HttpRequest jsonPost(String path, Object body) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body)));
-            return (authenticated ? authorized(builder) : builder.timeout(TIMEOUT)).build();
+            return identified(builder).build();
         } catch (IOException e) {
             throw new CoordinatorException("Cannot serialise request", e);
         }
     }
 
-    private HttpRequest.Builder authorized(HttpRequest.Builder builder) {
-        return builder.timeout(TIMEOUT).header("Authorization", "Bearer " + workerToken);
+    private HttpRequest.Builder identified(HttpRequest.Builder builder) {
+        builder.timeout(TIMEOUT);
+        return workerId == null ? builder : builder.header("X-Worker-Id", workerId);
     }
 
     private URI uri(String path) {

@@ -128,6 +128,6 @@ export function openDrawer(content) {
 export const drawerIsOpen = () => !document.getElementById('drawer').hidden;
 
 export const STATE_COLORS = {
-    SCHEDULED: 'var(--queued)', BLOCKED: 'var(--idle)', QUEUED: 'var(--queued)', RUNNING: 'var(--running)',
+    BLOCKED: 'var(--idle)', QUEUED: 'var(--queued)', RUNNING: 'var(--running)',
     SUCCEEDED: 'var(--ok)', FAILED: 'var(--bad)', CANCELLED: 'var(--idle)', SKIPPED: 'var(--idle)',
 };

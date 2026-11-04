@@ -9,7 +9,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,9 +27,8 @@ public class ArtifactController {
 
     @PostMapping(path = "/api/artifacts", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public ArtifactView upload(@RequestParam("file") MultipartFile file,
-                               @RequestHeader(value = "X-Client-Id", defaultValue = "anonymous") String clientId) {
-        return ArtifactView.from(artifacts.uploadInput(file, clientId));
+    public ArtifactView upload(@RequestParam("file") MultipartFile file) {
+        return ArtifactView.from(artifacts.uploadInput(file));
     }
 
     @GetMapping("/api/artifacts/{id}")
@@ -54,10 +52,10 @@ public class ArtifactController {
                 .body(new InputStreamResource(artifacts.open(artifact)));
     }
 
-    public record ArtifactView(String id, String jobId, String role, String originalName, String contentType,
+    public record ArtifactView(String id, String jobId, String originalName, String contentType,
                                long sizeBytes, String sha256, Instant createdAt) {
         public static ArtifactView from(ArtifactEntity a) {
-            return new ArtifactView(a.getId(), a.getJobId(), a.getRole(), a.getOriginalName(), a.getContentType(),
+            return new ArtifactView(a.getId(), a.getJobId(), a.getOriginalName(), a.getContentType(),
                     a.getSizeBytes(), a.getSha256(), a.getCreatedAt());
         }
     }

@@ -1,8 +1,6 @@
 package com.queuepilot.worker;
 
-import com.queuepilot.core.protocol.WorkerProtocol;
 import com.queuepilot.core.protocol.WorkerProtocol.Assignment;
-import com.queuepilot.core.protocol.WorkerProtocol.AttemptRef;
 import com.queuepilot.core.protocol.WorkerProtocol.CompletionReport;
 import com.queuepilot.core.protocol.WorkerProtocol.FailureReport;
 import com.queuepilot.core.protocol.WorkerProtocol.HeartbeatResponse;
@@ -31,28 +29,24 @@ class FakeCoordinator implements CoordinatorApi {
     final Map<String, List<Integer>> progress = new ConcurrentHashMap<>();
     final Set<String> revoked = ConcurrentHashMap.newKeySet();
     final AtomicInteger maxConcurrentClaims = new AtomicInteger();
-    final List<Integer> freeSlotsSeen = Collections.synchronizedList(new ArrayList<>());
     final Queue<String> commands = new ConcurrentLinkedQueue<>();
     final AtomicInteger heartbeats = new AtomicInteger();
     volatile RegisterRequest registration;
     volatile boolean deregistered;
     private final AtomicInteger outstanding = new AtomicInteger();
 
-    static Assignment assignment(String id, String task, Map<String, Object> input, int timeoutSeconds) {
-        String[] parts = task.split("@");
-        return new Assignment(id, "token-" + id, 1, "job-" + id, parts[0], parts[1], WorkerProtocol.KIND_JAVA_PLUGIN,
-                input, List.of(), 10_000, timeoutSeconds, null);
+    static Assignment assignment(String id, String taskType, Map<String, Object> input, int timeoutSeconds) {
+        return new Assignment(id, 1, "job-" + id, taskType, input, timeoutSeconds);
     }
 
     @Override
     public RegisterResponse register(RegisterRequest request) {
         registration = request;
-        return new RegisterResponse("w-test", "secret-token", 100, 10_000, 20);
+        return new RegisterResponse("w-test", 100);
     }
 
     @Override
-    public Optional<Assignment> claim(int freeSlots) {
-        freeSlotsSeen.add(freeSlots);
+    public Optional<Assignment> claim() {
         Assignment next = pending.poll();
         if (next != null) {
             maxConcurrentClaims.accumulateAndGet(outstanding.incrementAndGet(), Math::max);
@@ -61,11 +55,11 @@ class FakeCoordinator implements CoordinatorApi {
     }
 
     @Override
-    public HeartbeatResponse heartbeat(List<AttemptRef> activeAttempts) {
+    public HeartbeatResponse heartbeat(List<String> activeAttemptIds) {
         List<String> renewed = new ArrayList<>();
         List<String> revokedNow = new ArrayList<>();
-        for (AttemptRef ref : activeAttempts) {
-            (revoked.contains(ref.attemptId()) ? revokedNow : renewed).add(ref.attemptId());
+        for (String id : activeAttemptIds) {
+            (revoked.contains(id) ? revokedNow : renewed).add(id);
         }
         heartbeats.incrementAndGet();
         return new HeartbeatResponse(renewed, revokedNow, commands.poll());
@@ -95,12 +89,12 @@ class FakeCoordinator implements CoordinatorApi {
     }
 
     @Override
-    public void downloadInput(String attemptId, String fencingToken, String artifactId, Path target) {
+    public void downloadInput(String attemptId, String artifactId, Path target) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public String uploadOutput(String attemptId, String fencingToken, Path file, String contentType) {
+    public String uploadOutput(String attemptId, Path file, String contentType) {
         return "artifact-" + file.getFileName();
     }
 

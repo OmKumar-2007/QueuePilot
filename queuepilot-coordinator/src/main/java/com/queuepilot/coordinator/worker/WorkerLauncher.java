@@ -5,7 +5,6 @@ import com.queuepilot.coordinator.error.Errors.ConflictException;
 import com.queuepilot.coordinator.error.Errors.ValidationException;
 import com.queuepilot.coordinator.event.EventLog;
 import com.queuepilot.coordinator.event.EventType;
-import com.queuepilot.coordinator.security.SecretsProvider;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,16 +35,14 @@ public class WorkerLauncher {
     private static final Pattern NUMBERED = Pattern.compile("worker-(\\d+)");
 
     private final QueuePilotProperties properties;
-    private final SecretsProvider secrets;
     private final WorkerRepository workers;
     private final EventLog events;
     private final Environment environment;
     private final List<Process> launched = new ArrayList<>();
 
-    public WorkerLauncher(QueuePilotProperties properties, SecretsProvider secrets, WorkerRepository workers,
+    public WorkerLauncher(QueuePilotProperties properties, WorkerRepository workers,
                           EventLog events, Environment environment) {
         this.properties = properties;
-        this.secrets = secrets;
         this.workers = workers;
         this.events = events;
         this.environment = environment;
@@ -75,7 +72,6 @@ public class WorkerLauncher {
                     "--work-dir", properties.dataDir().resolve("worker-work").resolve(name).toString())
                     .redirectErrorStream(true)
                     .redirectOutput(logs.resolve(name + ".log").toFile());
-            builder.environment().put("QP_WORKER_SECRET", secrets.workerSecret());
             Process process = builder.start();
             launched.add(process);
             events.record(EventType.WORKER_STATUS_CHANGED, null, null, null,

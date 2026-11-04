@@ -7,7 +7,6 @@ import com.queuepilot.coordinator.attempt.AttemptService;
 import com.queuepilot.coordinator.attempt.AttemptService.UpdateResult;
 import com.queuepilot.coordinator.error.Errors.StaleAttemptException;
 import com.queuepilot.coordinator.scheduler.SchedulerService;
-import com.queuepilot.coordinator.security.WorkerPrincipal;
 import com.queuepilot.core.protocol.WorkerProtocol.Assignment;
 import com.queuepilot.core.protocol.WorkerProtocol.CompletionReport;
 import com.queuepilot.core.protocol.WorkerProtocol.FailureReport;
@@ -20,7 +19,6 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,12 +31,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * The worker protocol (docs/architecture/coordinator-worker-protocol.md). Every endpoint except
- * register requires the worker's bearer token; attempt endpoints also require the fencing token.
+ * The worker protocol (docs/architecture/coordinator-worker-protocol.md). After registering, a worker
+ * sends its id in the {@value #WORKER_HEADER} header on every call.
  */
 @RestController
 @RequestMapping("/api/worker")
 public class WorkerApiController {
+
+    public static final String WORKER_HEADER = "X-Worker-Id";
 
     private final WorkerRegistryService registry;
     private final SchedulerService scheduler;
@@ -60,40 +60,39 @@ public class WorkerApiController {
     }
 
     @PostMapping("/claim")
-    public ResponseEntity<Assignment> claim(@AuthenticationPrincipal WorkerPrincipal worker) {
-        return scheduler.claim(worker.workerId())
+    public ResponseEntity<Assignment> claim(@RequestHeader(WORKER_HEADER) String workerId) {
+        return scheduler.claim(workerId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @PostMapping("/heartbeat")
-    public HeartbeatResponse heartbeat(@AuthenticationPrincipal WorkerPrincipal worker, @RequestBody HeartbeatRequest request) {
-        return attempts.heartbeat(worker.workerId(), request.activeAttempts());
+    public HeartbeatResponse heartbeat(@RequestHeader(WORKER_HEADER) String workerId, @RequestBody HeartbeatRequest request) {
+        return attempts.heartbeat(workerId, request.activeAttemptIds());
     }
 
     @PostMapping("/attempts/{attemptId}/progress")
-    public void progress(@AuthenticationPrincipal WorkerPrincipal worker, @PathVariable String attemptId,
+    public void progress(@RequestHeader(WORKER_HEADER) String workerId, @PathVariable String attemptId,
                          @RequestBody ProgressReport report) {
-        requireAccepted(attempts.progress(worker.workerId(), attemptId, report), attemptId);
+        requireAccepted(attempts.progress(workerId, attemptId, report), attemptId);
     }
 
     @PostMapping("/attempts/{attemptId}/complete")
-    public void complete(@AuthenticationPrincipal WorkerPrincipal worker, @PathVariable String attemptId,
+    public void complete(@RequestHeader(WORKER_HEADER) String workerId, @PathVariable String attemptId,
                          @RequestBody CompletionReport report) {
-        requireAccepted(attempts.complete(worker.workerId(), attemptId, report), attemptId);
+        requireAccepted(attempts.complete(workerId, attemptId, report), attemptId);
     }
 
     @PostMapping("/attempts/{attemptId}/fail")
-    public void fail(@AuthenticationPrincipal WorkerPrincipal worker, @PathVariable String attemptId,
+    public void fail(@RequestHeader(WORKER_HEADER) String workerId, @PathVariable String attemptId,
                      @RequestBody FailureReport report) {
-        requireAccepted(attempts.fail(worker.workerId(), attemptId, report), attemptId);
+        requireAccepted(attempts.fail(workerId, attemptId, report), attemptId);
     }
 
     @GetMapping("/attempts/{attemptId}/artifacts/{artifactId}")
-    public ResponseEntity<InputStreamResource> downloadInput(@AuthenticationPrincipal WorkerPrincipal worker,
-                                                             @PathVariable String attemptId, @PathVariable String artifactId,
-                                                             @RequestHeader("X-Fencing-Token") String token) {
-        ArtifactEntity artifact = attempts.inputForAttempt(worker.workerId(), attemptId, token, artifactId);
+    public ResponseEntity<InputStreamResource> downloadInput(@RequestHeader(WORKER_HEADER) String workerId,
+                                                             @PathVariable String attemptId, @PathVariable String artifactId) {
+        ArtifactEntity artifact = attempts.inputForAttempt(workerId, attemptId, artifactId);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(artifact.getSizeBytes())
@@ -102,15 +101,14 @@ public class WorkerApiController {
 
     @PostMapping(path = "/attempts/{attemptId}/artifacts", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public ArtifactView uploadOutput(@AuthenticationPrincipal WorkerPrincipal worker, @PathVariable String attemptId,
-                                     @RequestHeader("X-Fencing-Token") String token,
+    public ArtifactView uploadOutput(@RequestHeader(WORKER_HEADER) String workerId, @PathVariable String attemptId,
                                      @RequestParam("file") MultipartFile file) {
-        return ArtifactView.from(attempts.uploadOutput(worker.workerId(), attemptId, token, file));
+        return ArtifactView.from(attempts.uploadOutput(workerId, attemptId, file));
     }
 
     @PostMapping("/deregister")
-    public void deregister(@AuthenticationPrincipal WorkerPrincipal worker) {
-        registry.deregister(worker.workerId());
+    public void deregister(@RequestHeader(WORKER_HEADER) String workerId) {
+        registry.deregister(workerId);
     }
 
     private static void requireAccepted(UpdateResult result, String attemptId) {

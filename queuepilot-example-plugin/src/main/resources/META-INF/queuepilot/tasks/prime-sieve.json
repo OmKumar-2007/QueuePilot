@@ -1,22 +1,19 @@
 {
   "taskType": "prime-sieve",
-  "version": "1.0.0",
   "displayName": "Prime sieve (example plugin)",
   "description": "Counts primes up to 'limit' with the sieve of Eratosthenes. Shipped as a separate plugin jar.",
-  "executorKind": "JAVA_PLUGIN",
-  "requiredCapabilities": ["cpu"],
   "inputSchema": {
     "fields": [
-      { "name": "limit", "type": "INTEGER", "required": true, "min": 10, "max": 500000000, "description": "Upper bound (inclusive)" }
+      {
+        "name": "limit",
+        "type": "INTEGER",
+        "required": true,
+        "min": 10,
+        "max": 500000000,
+        "description": "Upper bound (inclusive)"
+      }
     ]
   },
-  "outputSchema": {
-    "fields": [
-      { "name": "primeCount", "type": "INTEGER" },
-      { "name": "largestPrime", "type": "INTEGER" }
-    ]
-  },
-  "resources": { "cpuMillis": 1000, "memoryMb": 256 },
   "timeoutSeconds": 300,
   "maxRetries": 2,
   "defaultPriority": 5,

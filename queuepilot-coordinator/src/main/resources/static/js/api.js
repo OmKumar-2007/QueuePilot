@@ -13,7 +13,7 @@ export class ApiError extends Error {
     }
 }
 
-async function request(method, path, body, clientId) {
+async function request(method, path, body) {
     const headers = {};
     let payload;
     if (body instanceof FormData) {
@@ -21,9 +21,6 @@ async function request(method, path, body, clientId) {
     } else if (body !== undefined) {
         headers['Content-Type'] = 'application/json';
         payload = JSON.stringify(body);
-    }
-    if (clientId) {
-        headers['X-Client-Id'] = clientId;
     }
     const response = await fetch(path, { method, headers, body: payload });
     const text = await response.text();
@@ -43,12 +40,12 @@ async function request(method, path, body, clientId) {
 
 export const api = {
     get: path => request('GET', path),
-    post: (path, body, clientId) => request('POST', path, body ?? {}, clientId),
+    post: (path, body) => request('POST', path, body ?? {}),
     put: (path, body) => request('PUT', path, body),
-    upload: (file, clientId) => {
+    upload: file => {
         const form = new FormData();
         form.append('file', file);
-        return request('POST', '/api/artifacts', form, clientId);
+        return request('POST', '/api/artifacts', form);
     },
 };
 

@@ -26,8 +26,8 @@ const DEMO_JOBS = [
 ];
 
 async function runDemo() {
-    for (const [name, taskType, input, priority, queue, estimatedMs] of DEMO_JOBS) {
-        await api.post('/api/jobs', { name, taskType, input, priority, queue, estimatedMs }, 'demo');
+    for (const [, taskType, input, priority, queue, estimatedMs] of DEMO_JOBS) {
+        await api.post('/api/jobs', { taskType, input, priority, queue, estimatedMs });
     }
 }
 
@@ -37,7 +37,7 @@ const workerAction = (worker, path, message) =>
 function slotView(job) {
     if (!job) return h('div', { class: 'slot idle' }, 'Idle');
     return h('div', { class: 'slot', onclick: () => openJob(job.id), style: { cursor: 'pointer' } },
-        h('div', { class: 'job-line' }, h('strong', {}, job.name), h('span', { class: 'muted' }, `${job.progressPercent}%`)),
+        h('div', { class: 'job-line' }, h('strong', {}, job.label), h('span', { class: 'muted' }, `${job.progressPercent}%`)),
         progress(job.progressPercent));
 }
 
@@ -91,7 +91,7 @@ function statItems(o) {
     const item = (label, value, color) => h('div', { class: 'stat' },
         h('div', { class: 'value' }, value), h('div', { class: 'label' }, h('i', { style: { background: color } }), label));
     return [
-        item('Waiting', s.QUEUED + s.SCHEDULED + s.BLOCKED, 'var(--queued)'),
+        item('Waiting', s.QUEUED + s.BLOCKED, 'var(--queued)'),
         item('Running', s.RUNNING, 'var(--running)'),
         item('Succeeded', s.SUCCEEDED, 'var(--ok)'),
         item('Failed', s.FAILED + s.SKIPPED, 'var(--bad)'),

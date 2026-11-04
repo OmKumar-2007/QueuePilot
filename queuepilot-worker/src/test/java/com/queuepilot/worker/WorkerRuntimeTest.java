@@ -41,9 +41,8 @@ class WorkerRuntimeTest {
     }
 
     private void start(int slots, TaskExecutorRegistry registry, long paceMs, long freezeMs) throws Exception {
-        WorkerConfig config = new WorkerConfig("http://unused", "test-worker", slots, List.of("cpu"), "s",
-                null, workDir, false, "docker", paceMs, freezeMs);
-        runtime = new WorkerRuntime(config, coordinator, registry, null);
+        WorkerConfig config = new WorkerConfig("http://unused", "test-worker", slots, null, workDir, paceMs, freezeMs);
+        runtime = new WorkerRuntime(config, coordinator, registry);
         runtime.start();
     }
 
@@ -61,7 +60,6 @@ class WorkerRuntimeTest {
     private static TaskExecutor counter(String type, CountDownLatch started) {
         return new TaskExecutor() {
             public String taskType() { return type; }
-            public String version() { return "1.0.0"; }
             public TaskOutput execute(TaskInput input, TaskContext context) throws TaskFailure {
                 started.countDown();
                 long steps = input.getLong("steps", 100);
@@ -83,14 +81,14 @@ class WorkerRuntimeTest {
     @DisplayName("Worker registers its tasks and runs real work without exceeding its slot limit")
     void registersItsTasksAndRunsRealWorkWithinItsSlotLimit() throws Exception {
         for (int i = 0; i < 6; i++) {
-            coordinator.pending.add(FakeCoordinator.assignment("a" + i, "monte-carlo-pi@1.0.0",
+            coordinator.pending.add(FakeCoordinator.assignment("a" + i, "monte-carlo-pi",
                     Map.of("samples", 3_000_000, "seed", i), 60));
         }
         start(2, TaskExecutorRegistry.load(null));
 
         await(() -> coordinator.completed.size() == 6, Duration.ofSeconds(60));
 
-        assertThat(coordinator.registration.supportedTasks()).contains("monte-carlo-pi@1.0.0", "sorting@1.0.0");
+        assertThat(coordinator.registration.supportedTasks()).contains("monte-carlo-pi", "sorting");
         assertThat(coordinator.maxConcurrentClaims.get()).isLessThanOrEqualTo(2);
         double estimate = ((Number) coordinator.completed.get("a0").output().get("estimate")).doubleValue();
         assertThat(estimate).isBetween(3.10, 3.18);
@@ -101,7 +99,7 @@ class WorkerRuntimeTest {
     @Test
     @DisplayName("Task failures are reported with the task's retryable flag")
     void taskFailuresAreReportedWithTheirRetryableFlag() throws Exception {
-        coordinator.pending.add(FakeCoordinator.assignment("bad-input", "sorting@1.0.0", Map.of(), 60));
+        coordinator.pending.add(FakeCoordinator.assignment("bad-input", "sorting", Map.of(), 60));
         coordinator.pending.add(FakeCoordinator.assignment("unknown", "teleport@9.9.9", Map.of(), 60));
         start(1, TaskExecutorRegistry.load(null));
 
@@ -116,7 +114,7 @@ class WorkerRuntimeTest {
     @Test
     @DisplayName("A task running past its timeout is stopped and reported as TIMEOUT")
     void localTimeoutStopsTheTaskAndReportsTimeout() throws Exception {
-        coordinator.pending.add(FakeCoordinator.assignment("slow", "monte-carlo-pi@1.0.0",
+        coordinator.pending.add(FakeCoordinator.assignment("slow", "monte-carlo-pi",
                 Map.of("samples", 2_000_000_000), 1));
         start(1, TaskExecutorRegistry.load(null));
 
@@ -130,8 +128,8 @@ class WorkerRuntimeTest {
     @DisplayName("An attempt revoked by the coordinator is abandoned without reporting anything")
     void revokedAttemptIsAbandonedSilently() throws Exception {
         CountDownLatch started = new CountDownLatch(1);
-        coordinator.pending.add(FakeCoordinator.assignment("doomed", "count@1.0.0", Map.of("steps", 1_000_000, "stepMs", 1), 60));
-        start(1, new TaskExecutorRegistry(Map.of("count@1.0.0", counter("count", started))));
+        coordinator.pending.add(FakeCoordinator.assignment("doomed", "count", Map.of("steps", 1_000_000, "stepMs", 1), 60));
+        start(1, new TaskExecutorRegistry(Map.of("count", counter("count", started))));
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
         coordinator.revoked.add("doomed");
@@ -144,7 +142,7 @@ class WorkerRuntimeTest {
     @Test
     @DisplayName("Demo pacing slows a job down to at least pace x 100 ms and marks the output")
     void demoPacingMakesJobsWatchable() throws Exception {
-        coordinator.pending.add(FakeCoordinator.assignment("paced", "sorting@1.0.0", Map.of("numbers", List.of(3, 1, 2)), 60));
+        coordinator.pending.add(FakeCoordinator.assignment("paced", "sorting", Map.of("numbers", List.of(3, 1, 2)), 60));
         long startedAt = System.nanoTime();
         start(1, TaskExecutorRegistry.load(null), 20, 20_000);
 
@@ -162,15 +160,15 @@ class WorkerRuntimeTest {
     @DisplayName("PAUSE holds a running job and stops claiming; RESUME lets it finish")
     void pauseHoldsWorkAndResumeContinues() throws Exception {
         CountDownLatch started = new CountDownLatch(1);
-        coordinator.pending.add(FakeCoordinator.assignment("long", "count@1.0.0", Map.of("steps", 100, "stepMs", 30), 60));
-        start(1, new TaskExecutorRegistry(Map.of("count@1.0.0", counter("count", started))));
+        coordinator.pending.add(FakeCoordinator.assignment("long", "count", Map.of("steps", 100, "stepMs", 30), 60));
+        start(1, new TaskExecutorRegistry(Map.of("count", counter("count", started))));
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
         coordinator.commands.add(WorkerProtocol.COMMAND_PAUSE);
         await(runtime::isPaused, Duration.ofSeconds(5));
         Thread.sleep(500);
         int progressWhilePaused = coordinator.progress.getOrDefault("long", List.of()).size();
-        coordinator.pending.add(FakeCoordinator.assignment("queued", "count@1.0.0", Map.of("steps", 1), 60));
+        coordinator.pending.add(FakeCoordinator.assignment("queued", "count", Map.of("steps", 1), 60));
         Thread.sleep(800);
 
         assertThat(coordinator.progress.getOrDefault("long", List.of())).hasSize(progressWhilePaused);
@@ -188,9 +186,9 @@ class WorkerRuntimeTest {
     @DisplayName("INTERRUPT stops running jobs and reports them as INTERRUPTED (retryable)")
     void interruptStopsRunningJobs() throws Exception {
         CountDownLatch started = new CountDownLatch(2);
-        coordinator.pending.add(FakeCoordinator.assignment("i1", "count@1.0.0", Map.of("steps", 1_000_000, "stepMs", 1), 60));
-        coordinator.pending.add(FakeCoordinator.assignment("i2", "count@1.0.0", Map.of("steps", 1_000_000, "stepMs", 1), 60));
-        start(2, new TaskExecutorRegistry(Map.of("count@1.0.0", counter("count", started))));
+        coordinator.pending.add(FakeCoordinator.assignment("i1", "count", Map.of("steps", 1_000_000, "stepMs", 1), 60));
+        coordinator.pending.add(FakeCoordinator.assignment("i2", "count", Map.of("steps", 1_000_000, "stepMs", 1), 60));
+        start(2, new TaskExecutorRegistry(Map.of("count", counter("count", started))));
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
         coordinator.commands.add(WorkerProtocol.COMMAND_INTERRUPT);

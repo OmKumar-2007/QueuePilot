@@ -1,7 +1,6 @@
 package com.queuepilot.worker;
 
 import com.queuepilot.core.protocol.WorkerProtocol.Assignment;
-import com.queuepilot.core.protocol.WorkerProtocol.AttemptRef;
 import com.queuepilot.core.protocol.WorkerProtocol.CompletionReport;
 import com.queuepilot.core.protocol.WorkerProtocol.FailureReport;
 import com.queuepilot.core.protocol.WorkerProtocol.HeartbeatResponse;
@@ -25,9 +24,9 @@ public interface CoordinatorApi {
 
     RegisterResponse register(RegisterRequest request);
 
-    Optional<Assignment> claim(int freeSlots);
+    Optional<Assignment> claim();
 
-    HeartbeatResponse heartbeat(List<AttemptRef> activeAttempts);
+    HeartbeatResponse heartbeat(List<String> activeAttemptIds);
 
     boolean progress(String attemptId, ProgressReport report);
 
@@ -35,9 +34,9 @@ public interface CoordinatorApi {
 
     boolean fail(String attemptId, FailureReport report);
 
-    void downloadInput(String attemptId, String fencingToken, String artifactId, Path target) throws IOException;
+    void downloadInput(String attemptId, String artifactId, Path target) throws IOException;
 
-    String uploadOutput(String attemptId, String fencingToken, Path file, String contentType) throws IOException;
+    String uploadOutput(String attemptId, Path file, String contentType) throws IOException;
 
     void deregister();
 

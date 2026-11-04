@@ -40,7 +40,7 @@ class Api:
     def call(self, method, path, body=None):
         data = None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(self.base + path, data=data, method=method,
-                                         headers={"Content-Type": "application/json", "X-Client-Id": "simulation"})
+                                         headers={"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
                 text = response.read()
@@ -122,7 +122,7 @@ def workflow(name, failing):
 def submit_all(api, with_nqueens, rng):
     tracked = []  # dicts: id, name, task, expected, note
     for name, request, expected, note in single_jobs(rng, with_nqueens):
-        status, body = api.call("POST", "/api/jobs", {"name": name, **request})
+        status, body = api.call("POST", "/api/jobs", request)
         if status != 201:
             print(f"  ! {name} was rejected: {status} {body}")
             continue
@@ -135,7 +135,7 @@ def submit_all(api, with_nqueens, rng):
             continue
         for node in body["nodes"]:
             note = "first step fails -> later steps skipped" if failing else "workflow step"
-            tracked.append({"id": node["jobId"], "name": f"{wf_name}/{node['step']}", "task": node["task"].split("@")[0],
+            tracked.append({"id": node["jobId"], "name": f"{wf_name}/{node['step']}", "task": node["task"],
                             "expected": expected[node["step"]], "note": note})
     # Two requests the API must refuse before they become jobs.
     rejected = [
@@ -221,7 +221,7 @@ def main():
         actual = job["state"]
         ok = actual == t["expected"]
         mismatches += 0 if ok else 1
-        detail = job.get("errorCode") if actual in FAILED_STATES else summarize(job)
+        detail = (job.get("error") or "").split(":")[0] if actual in FAILED_STATES else summarize(job)
         retried = " (retried)" if job["attemptsUsed"] > 1 else ""
         print(f"{t['name'][:30]:30} {t['task'][:15]:15} {t['expected']:10} {actual:10}{'' if ok else ' !'} "
               f"{job['attemptsUsed']:>4}  {detail or ''}{retried}")

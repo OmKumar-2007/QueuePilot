@@ -30,7 +30,7 @@ import java.util.Optional;
 
 /**
  * Makes the dispatch decision when a worker asks for work (U3, ADR-006):
- * readiness filter (query) -> capability filter -> queue rotation -> active policy -> atomic claim.
+ * readiness filter (query) -> task-type filter -> queue rotation -> active policy -> atomic claim.
  *
  * <p>This class only orders and matches; it never looks at task inputs or task code.</p>
  */
@@ -103,7 +103,7 @@ public class SchedulerService {
 
     /**
      * Explains the current dispatch order for the dashboard: claimable jobs in the order the next
-     * decisions would take them (ignoring worker capabilities), plus jobs that are not yet runnable.
+     * decisions would take them (ignoring which worker asks), plus jobs that are not yet runnable.
      */
     public QueuePreview preview() {
         Instant now = clock.instant();
@@ -117,7 +117,7 @@ public class SchedulerService {
         for (SchedulableJob job : rotation.arrange(claimable.stream().map(JobEntity::toSchedulable).toList(), policy, now)) {
             JobEntity entity = byId.get(job.id());
             Long effective = policy instanceof PriorityAgingPolicy aging ? aging.effectivePriority(job, now) : null;
-            ready.add(new QueuePreview.Entry(rank++, job.id(), entity.getName(), entity.taskIdentifier(), job.queue(),
+            ready.add(new QueuePreview.Entry(rank++, job.id(), entity.label(), entity.getTaskType(), job.queue(),
                     job.priority(), effective, job.estimatedMs(), job.submittedAt(), "Ready"));
         }
 
@@ -128,9 +128,6 @@ public class SchedulerService {
                 waiting.add(waitingEntry(job, "Retry delay until " + job.getReadyAt()));
             }
         }
-        for (JobEntity job : jobs.findByStateOrderBySubmittedAtAsc(JobState.SCHEDULED, page)) {
-            waiting.add(waitingEntry(job, "Starts at " + job.getStartAt()));
-        }
         for (JobEntity job : jobs.findByStateOrderBySubmittedAtAsc(JobState.BLOCKED, page)) {
             waiting.add(waitingEntry(job, "Waiting for " + job.getPrerequisiteIds().size() + " prerequisite(s)"));
         }
@@ -138,7 +135,7 @@ public class SchedulerService {
     }
 
     private static QueuePreview.Entry waitingEntry(JobEntity job, String reason) {
-        return new QueuePreview.Entry(null, job.getId(), job.getName(), job.taskIdentifier(), job.getQueueName(),
+        return new QueuePreview.Entry(null, job.getId(), job.label(), job.getTaskType(), job.getQueueName(),
                 job.getPriority(), null, job.getEstimatedMs(), job.getSubmittedAt(), reason);
     }
 

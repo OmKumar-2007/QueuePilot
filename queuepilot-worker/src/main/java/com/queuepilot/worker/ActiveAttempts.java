@@ -1,6 +1,5 @@
 package com.queuepilot.worker;
 
-import com.queuepilot.core.protocol.WorkerProtocol.AttemptRef;
 
 import java.util.List;
 import java.util.Map;
@@ -12,34 +11,29 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ActiveAttempts {
 
-    private record Entry(String fencingToken, WorkerTaskContext context) {
-    }
+    private final Map<String, WorkerTaskContext> attempts = new ConcurrentHashMap<>();
 
-    private final Map<String, Entry> attempts = new ConcurrentHashMap<>();
-
-    public void add(String attemptId, String fencingToken, WorkerTaskContext context) {
-        attempts.put(attemptId, new Entry(fencingToken, context));
+    public void add(String attemptId, WorkerTaskContext context) {
+        attempts.put(attemptId, context);
     }
 
     public void remove(String attemptId) {
         attempts.remove(attemptId);
     }
 
-    public List<AttemptRef> refs() {
-        return attempts.entrySet().stream()
-                .map(e -> new AttemptRef(e.getKey(), e.getValue().fencingToken()))
-                .toList();
+    public List<String> ids() {
+        return List.copyOf(attempts.keySet());
     }
 
     public void cancel(String attemptId, WorkerTaskContext.CancelReason reason) {
-        Entry entry = attempts.get(attemptId);
-        if (entry != null) {
-            entry.context().cancel(reason);
+        WorkerTaskContext context = attempts.get(attemptId);
+        if (context != null) {
+            context.cancel(reason);
         }
     }
 
     public void cancelAll(WorkerTaskContext.CancelReason reason) {
-        attempts.values().forEach(entry -> entry.context().cancel(reason));
+        attempts.values().forEach(context -> context.cancel(reason));
     }
 
     public int size() {
