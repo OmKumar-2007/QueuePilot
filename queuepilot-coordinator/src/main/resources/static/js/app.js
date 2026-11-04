@@ -5,11 +5,10 @@ import dashboard from './views/dashboard.js';
 import jobs from './views/jobs.js';
 import submit from './views/submit.js';
 import workflows from './views/workflows.js';
-import scheduler from './views/scheduler.js';
 import tasks from './views/tasks.js';
 import logs from './views/logs.js';
 
-const routes = { dashboard, workers: dashboard, overview: dashboard, jobs, submit, workflows, scheduler, tasks, logs };
+const routes = { dashboard, workers: dashboard, overview: dashboard, jobs, submit, workflows, tasks, logs };
 let current = null;
 let timer = null;
 

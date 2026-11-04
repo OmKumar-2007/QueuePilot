@@ -19,7 +19,7 @@ Clients submit jobs for **registered task types**. A **coordinator** validates a
 | Worker controls | Pause / resume (jobs hold in place), interrupt (jobs stop and are retried), freeze (heartbeats stop for 20 s), crash (process exits), add worker from the dashboard |
 | Demo pacing | Optional `--pace-ms` per worker so jobs take ~15-30 s and can be watched; recorded in each job's output, never used for benchmarks |
 | Workflows | DAG submission, cycle rejection, parallel branches, skip-on-failure propagation, graph view |
-| Dashboard | Live view (workers and their running jobs, controls, up next, activity), jobs, submit, workflows, scheduler, tasks, full event logs; light and dark mode |
+| Dashboard | Live view (workers and their running jobs, controls, up next, activity), jobs, submit, workflows, tasks, full event logs; light and dark mode |
 | Benchmarks | Separate module: simulated policy comparison + measured execution with worker scaling |
 
 ## Technology

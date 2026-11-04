@@ -101,12 +101,19 @@ async function refreshDrawer() {
         openJobId = null;
         return;
     }
+    const fresh = await jobDetail(openJobId);
     const content = document.getElementById('drawer-content');
     const panel = content.parentElement;
-    const scroll = panel.scrollTop;
+
+    // Read the page state only now, so anything the user did during the fetch is kept.
     const openDetails = [...content.querySelectorAll('details')].map(d => d.open);
-    content.replaceChildren(await jobDetail(openJobId));
-    content.querySelectorAll('details').forEach((d, i) => (d.open = openDetails[i] || false));
+    fresh.querySelectorAll('details').forEach((d, i) => (d.open = openDetails[i] || false));
+    if (content.firstElementChild?.isEqualNode(fresh)) return; // nothing changed: leave scrolling and text selection alone
+
+    const scroll = panel.scrollTop;
+    const blocks = [...content.querySelectorAll('pre.json')].map(p => [p.scrollTop, p.scrollLeft]);
+    content.replaceChildren(fresh);
+    content.querySelectorAll('pre.json').forEach((p, i) => ([p.scrollTop, p.scrollLeft] = blocks[i] || [0, 0]));
     panel.scrollTop = scroll;
 }
 
