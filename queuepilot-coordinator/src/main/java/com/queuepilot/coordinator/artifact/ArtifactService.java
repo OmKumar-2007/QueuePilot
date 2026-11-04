@@ -3,6 +3,8 @@ package com.queuepilot.coordinator.artifact;
 import com.queuepilot.coordinator.error.Errors.NotFoundException;
 import com.queuepilot.coordinator.error.Errors.ValidationException;
 import com.queuepilot.core.schema.ValidationError;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,6 +21,8 @@ import java.util.UUID;
 /** Upload, download and job-linking rules for artifacts (F21). */
 @Service
 public class ArtifactService {
+
+    private static final Logger log = LoggerFactory.getLogger(ArtifactService.class);
 
     /** Largest file accepted (50 MB). */
     static final long MAX_ARTIFACT_BYTES = 50L * 1024 * 1024;
@@ -100,6 +104,17 @@ public class ArtifactService {
     @Transactional(readOnly = true)
     public List<ArtifactEntity> forJob(String jobId) {
         return repository.findByJobId(jobId);
+    }
+
+    /** Best effort: a file that cannot be deleted is only wasted disk space, so it must not fail the caller. */
+    public void deleteFiles(List<String> ids) {
+        for (String id : ids) {
+            try {
+                storage.delete(id);
+            } catch (IOException e) {
+                log.warn("Could not delete artifact file {}: {}", id, e.getMessage());
+            }
+        }
     }
 
     private static String sanitizeName(String original) {

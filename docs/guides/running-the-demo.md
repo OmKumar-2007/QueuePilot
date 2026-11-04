@@ -20,4 +20,6 @@ Prerequisite: `./mvnw install -DskipTests`, then `scripts/start-demo.ps1` (Windo
 
 **Load test:** `python scripts/simulate_jobs.py --chaos` submits 50 jobs (38 succeed, 8 fail, 4 are skipped) and checks every outcome. See [simulating-50-jobs.md](simulating-50-jobs.md).
 
+**Clear history** on the **Live** page permanently deletes all logs and finished jobs, except finished jobs that unfinished jobs or workflows still need.
+
 Stop: close the windows, or `pkill -f queuepilot-` (Git Bash/Linux). Delete `data/` to reset everything.

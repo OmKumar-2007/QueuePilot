@@ -1,7 +1,7 @@
 // The live view: what each worker is doing right now, what runs next, and what just happened.
 import { api } from '../api.js';
 import { act } from '../app.js';
-import { badge, card, empty, fmtTime, h, progress, relative } from '../ui.js';
+import { badge, card, empty, fmtTime, h, progress, relative, toast } from '../ui.js';
 import { openJob } from './jobs.js';
 
 let busy = false;
@@ -168,11 +168,21 @@ function build(root) {
         class: 'button secondary',
         onclick: () => act(() => api.post('/api/admin/workers/launch?slots=2'), 'Starting a new worker…').then(update).catch(() => {}),
     }, '+ Add worker');
+    const clearHistory = h('button', {
+        class: 'button danger',
+        onclick: () => confirm('Permanently delete all logs and finished jobs, including their results and files? '
+            + 'This cannot be undone. Queued and running jobs are not affected.')
+            && act(() => api.post('/api/admin/history/clear')).then(cleared => {
+                const kept = cleared.jobsKept ? `; kept ${cleared.jobsKept} finished that unfinished jobs depend on` : '';
+                toast(`Cleared ${cleared.jobs} jobs and ${cleared.logs} logs${kept}`);
+                return update();
+            }).catch(() => {}),
+    }, 'Clear history');
 
     cards.clear();
     root.replaceChildren(
         h('div', { class: 'page-head' }, h('h1', {}, 'Live'), h('span', { class: 'spacer' }),
-            h('div', { class: 'segmented', title: 'Scheduling policy' }, parts.policyButtons), addWorker, demoButton),
+            h('div', { class: 'segmented', title: 'Scheduling policy' }, parts.policyButtons), clearHistory, addWorker, demoButton),
         parts.stats,
         h('div', { class: 'section' }, h('div', { class: 'section-head' }, h('h2', {}, 'Workers'), parts.workerSummary), parts.workers),
         h('div', { class: 'section grid cols-2' },
