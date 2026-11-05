@@ -44,6 +44,8 @@ queuepilot:
   worker-timeout-ms: 10000
   recovery-interval-ms: 1000
   recovery-enabled: true
+  # Most workers allowed at once. Workers that are OFFLINE do not count.
+  max-workers: 4
   # "Add worker" in the dashboard starts this jar; launched workers use demo pacing so jobs are watchable.
   worker-jar: target/worker/queuepilot-worker-1.0.0-exec.jar
   launched-worker-pace-ms: 150

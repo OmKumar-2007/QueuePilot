@@ -81,6 +81,8 @@ interface WorkerRepository extends JpaRepository<WorkerEntity, String> {
 
     List<WorkerEntity> findByStatusIn(Collection<WorkerStatus> statuses);
 
+    long countByStatusNot(WorkerStatus status);
+
     @Query("select w.id from WorkerEntity w where w.status in (ONLINE, "
             + "DRAINING, PAUSED) and w.lastHeartbeatAt < :cutoff")
     List<String> findSilentWorkerIds(@Param("cutoff") Instant cutoff);

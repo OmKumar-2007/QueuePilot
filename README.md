@@ -14,7 +14,7 @@ Clients submit jobs for **registered task types**. A **coordinator** validates a
 | Plugins | `TaskExecutor` contract; built-ins: sorting, text analysis, Monte Carlo pi, file checksum; example third-party plugin with prime sieve and an N-Queens solver; **Custom JavaScript**: upload a `.js` file defining `run(input, progress)` and the worker runs it with Node.js (sample: `examples/sample-files/fibonacci.js`; not sandboxed) |
 | Jobs | Schema validation, priorities, queues, dependencies, cancel-before-start |
 | Scheduling | FCFS, Priority with Aging, SJF (switchable live); round-robin fairness across queues; jobs go only to workers that have the plugin and a free slot |
-| Workers | Separate JVM processes; concurrency slots; real progress; input/output files; local timeouts |
+| Workers | Separate JVM processes, at most 4 at a time (`queuepilot.max-workers`; offline workers do not count); concurrency slots; real progress; input/output files; local timeouts |
 | Reliability | Heartbeats, leases, late results from old attempts rejected, bounded retry with exponential backoff, task timeouts, offline detection |
 | Worker controls | Pause / resume (jobs hold in place), interrupt (jobs stop and are retried), freeze (heartbeats stop for 20 s), crash (process exits), add worker from the dashboard |
 | Demo pacing | Optional `--pace-ms` per worker so jobs take ~15-30 s and can be watched; recorded in each job's output, never used for benchmarks |
@@ -78,7 +78,7 @@ Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/s
 ./mvnw verify
 ```
 
-113 tests, all passing: unit tests for policies, aging, fairness, DAG, schemas, retry and metrics; plugin tests (including the JavaScript task, skipped if Node.js is missing); worker runtime tests (concurrency, timeouts, revocation, plugin loading); coordinator integration tests over the real HTTP API (validation, plugin matching, concurrent claims, lease expiry, stale-attempt rejection, retry limits, timeouts, workflows, artifacts); end-to-end tests with four real worker runtimes over HTTP (concurrency, interrupt and retry, pause and resume, freeze and recovery); one test against a real PostgreSQL server (embedded binaries). See [testing strategy](docs/testing/testing-strategy.md).
+117 tests, all passing: unit tests for policies, aging, fairness, DAG, schemas, retry and metrics; plugin tests (including the JavaScript task, skipped if Node.js is missing); worker runtime tests (concurrency, timeouts, revocation, plugin loading); coordinator integration tests over the real HTTP API (validation, plugin matching, concurrent claims, lease expiry, stale-attempt rejection, retry limits, timeouts, workflows, artifacts); end-to-end tests with four real worker runtimes over HTTP (concurrency, interrupt and retry, pause and resume, freeze and recovery); one test against a real PostgreSQL server (embedded binaries). See [testing strategy](docs/testing/testing-strategy.md).
 
 ## Documentation
 

@@ -121,7 +121,8 @@ public class WorkerRuntime {
                         config.paceMsPerPercent() > 0 ? "; DEMO PACING " + config.paceMsPerPercent() + " ms per percent" : "");
                 return response;
             } catch (CoordinatorApi.CoordinatorException e) {
-                if (e.status() == 400) {
+                // 400 = bad settings, 409 = worker limit reached: retrying straight away would not help.
+                if (e.status() == 400 || e.status() == 409) {
                     throw new IllegalStateException("Registration rejected: " + e.getMessage());
                 }
                 log.warn("Coordinator not reachable ({}); retrying in {} ms", e.getMessage(), backoff);
@@ -216,6 +217,9 @@ public class WorkerRuntime {
         pauseGate.resume();
         try {
             registerWithRetry();
+        } catch (IllegalStateException e) {
+            // Our place may have been taken while we were offline; the next heartbeat tries again.
+            log.warn("Could not re-register: {}", e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

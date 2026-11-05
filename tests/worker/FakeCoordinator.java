@@ -33,6 +33,7 @@ class FakeCoordinator implements CoordinatorApi {
     final AtomicInteger heartbeats = new AtomicInteger();
     volatile RegisterRequest registration;
     volatile boolean deregistered;
+    volatile RuntimeException registerFailure;
     private final AtomicInteger outstanding = new AtomicInteger();
 
     static Assignment assignment(String id, String taskType, Map<String, Object> input, int timeoutSeconds) {
@@ -41,6 +42,9 @@ class FakeCoordinator implements CoordinatorApi {
 
     @Override
     public RegisterResponse register(RegisterRequest request) {
+        if (registerFailure != null) {
+            throw registerFailure;
+        }
         registration = request;
         return new RegisterResponse("w-test", 100);
     }

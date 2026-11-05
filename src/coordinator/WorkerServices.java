@@ -65,20 +65,25 @@ class WorkerRegistryService {
     private final AttemptService attemptService;
     private final EventLog events;
     private final QueuePilotProperties properties;
+    private final TransactionTemplate transactions;
     private final Clock clock;
 
     public WorkerRegistryService(WorkerRepository workers, AttemptRepository attempts, @Lazy AttemptService attemptService,
-                                 EventLog events, QueuePilotProperties properties, Clock clock) {
+                                 EventLog events, QueuePilotProperties properties, TransactionTemplate transactions, Clock clock) {
         this.workers = workers;
         this.attempts = attempts;
         this.attemptService = attemptService;
         this.events = events;
         this.properties = properties;
+        this.transactions = transactions;
         this.clock = clock;
     }
 
-    @Transactional
-    public RegisterResponse register(RegisterRequest request) {
+    /**
+     * Synchronized, with its own transaction inside the lock, so that workers registering at the same
+     * moment cannot all see a free place: each one commits before the next one counts.
+     */
+    public synchronized RegisterResponse register(RegisterRequest request) {
         List<ValidationError> errors = new ArrayList<>();
         if (request.name() == null || !NAME.matcher(request.name()).matches()) {
             errors.add(new ValidationError("name", "must be 1-64 characters from A-Z a-z 0-9 . _ -"));
@@ -94,13 +99,23 @@ class WorkerRegistryService {
             throw new ValidationException(errors);
         }
 
-        WorkerEntity worker = new WorkerEntity("w-" + UUID.randomUUID().toString().substring(0, 8), request.name(),
-                request.concurrencyLimit(), tasks, request.demoPaceMs(), clock.instant());
-        workers.save(worker);
-        events.record(EventType.WORKER_REGISTERED, null, worker.getId(), null, "Worker " + worker.getName() + " ("
-                + worker.getId() + ") registered with " + request.concurrencyLimit() + " slots, tasks " + tasks
-                + (request.demoPaceMs() > 0 ? ", demo pacing " + request.demoPaceMs() + " ms per percent" : ""));
-        return new RegisterResponse(worker.getId(), properties.heartbeatIntervalMs());
+        return transactions.execute(status -> {
+            requireFreePlace();
+            WorkerEntity worker = new WorkerEntity("w-" + UUID.randomUUID().toString().substring(0, 8), request.name(),
+                    request.concurrencyLimit(), tasks, request.demoPaceMs(), clock.instant());
+            workers.save(worker);
+            events.record(EventType.WORKER_REGISTERED, null, worker.getId(), null, "Worker " + worker.getName() + " ("
+                    + worker.getId() + ") registered with " + request.concurrencyLimit() + " slots, tasks " + tasks
+                    + (request.demoPaceMs() > 0 ? ", demo pacing " + request.demoPaceMs() + " ms per percent" : ""));
+            return new RegisterResponse(worker.getId(), properties.heartbeatIntervalMs());
+        });
+    }
+
+    /** Every worker that is not OFFLINE counts, including paused, draining and disabled ones. */
+    public void requireFreePlace() {
+        if (workers.countByStatusNot(WorkerStatus.OFFLINE) >= properties.maxWorkers()) {
+            throw new ConflictException("Worker limit reached: at most " + properties.maxWorkers() + " workers can run at a time");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -240,14 +255,16 @@ class WorkerLauncher {
 
     private final QueuePilotProperties properties;
     private final WorkerRepository workers;
+    private final WorkerRegistryService registry;
     private final EventLog events;
     private final Environment environment;
     private final List<Process> launched = new ArrayList<>();
 
-    public WorkerLauncher(QueuePilotProperties properties, WorkerRepository workers,
+    public WorkerLauncher(QueuePilotProperties properties, WorkerRepository workers, WorkerRegistryService registry,
                           EventLog events, Environment environment) {
         this.properties = properties;
         this.workers = workers;
+        this.registry = registry;
         this.events = events;
         this.environment = environment;
     }
@@ -260,6 +277,7 @@ class WorkerLauncher {
         if (slots < 1 || slots > 8) {
             throw new ValidationException("slots", "must be 1..8");
         }
+        registry.requireFreePlace();
         Path jar = properties.workerJar().toAbsolutePath();
         if (!Files.isRegularFile(jar)) {
             throw new ConflictException("Worker jar not found at " + jar + "; build it with mvnw install");

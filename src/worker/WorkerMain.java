@@ -45,7 +45,12 @@ public final class WorkerMain {
         TaskExecutorRegistry registry = TaskExecutorRegistry.load(config.pluginsDir());
         WorkerRuntime runtime = new WorkerRuntime(config, new HttpCoordinatorClient(config.coordinatorUrl()), registry);
         Runtime.getRuntime().addShutdownHook(new Thread(runtime::stop, "qp-shutdown"));
-        runtime.start();
+        try {
+            runtime.start();
+        } catch (IllegalStateException e) {
+            System.err.println(e.getMessage());
+            System.exit(1);
+        }
     }
 
     /**

@@ -30,6 +30,7 @@ java -jar target/benchmarks/queuepilot-benchmarks-1.0.0.jar execute \
 ```
 
 - Starts the requested number of real worker processes per configuration (or uses existing ones when `--worker-jar` is omitted; other online workers should be drained first so they do not take benchmark jobs).
+- The limit of 4 workers (`queuepilot.max-workers`) applies here too: workers already running count towards it, so stop them first or the benchmark's workers are refused.
 - For each workload: one warm-up batch (discarded, lets the JIT compile), then the measured repetitions. Each batch uses its own queue.
 - Timestamps come from the coordinator (submitted, started, finished), so execution time includes only the task, while turnaround includes queueing and dispatch.
 - Reported: median and p95 of per-run medians, throughput, utilization (busy time ÷ slots × makespan), success rate, retries, machine-wide CPU load and memory (sampled every 250 ms with `OperatingSystemMXBean`, because all processes are local).

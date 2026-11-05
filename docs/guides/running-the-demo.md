@@ -11,7 +11,7 @@ Prerequisite: `./mvnw install -DskipTests`, then `scripts/start-demo.ps1` (Windo
 | 5. Interrupt | **Interrupt** on a busy worker | Its jobs stop, are recorded as INTERRUPTED and go back to the queue; another slot picks them up (attempt 2) |
 | 6. Freeze | **Freeze** on a busy worker | Heartbeats stop for 20 s: after ~10 s it is OFFLINE and its jobs move to other workers; then it thaws and re-registers by itself |
 | 7. Crash | **Crash** on a busy worker | The process exits (code 137); its jobs are recovered by the other workers |
-| 8. Scale | **+ Add worker** | A new worker process starts and takes work within seconds |
+| 8. Scale | **Crash** a worker, wait for it to go OFFLINE, then **+ Add worker** | The demo already runs the limit of 4 workers, so **+ Add worker** is refused until one has gone offline. Then a new worker process starts and takes work within seconds |
 | 9. Extensibility | Register the prime-sieve manifest with `POST /api/admin/tasks` (see [Adding a task type](adding-a-task-type.md)) → submit a prime-sieve job | Only worker-1 (which has the jar) runs it |
 | 10. Workflow | **Workflows → Submit workflow** (template prefilled) | Graph runs ingest → validate → 3 parallel simulations → combine → verify |
 | 11. Failure propagation | Submit a workflow whose first step has an impossible input, e.g. sorting with `{}` | First step FAILED, every later step SKIPPED |

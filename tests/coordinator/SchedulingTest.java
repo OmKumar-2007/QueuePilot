@@ -112,11 +112,11 @@ class SchedulingTest extends CoordinatorTestBase {
             submitId(piJob(10_000));
         }
         List<Worker> workers = new ArrayList<>();
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 4; i++) {
             workers.add(registerWorker("racer-" + i, 10, ALL_BUILTINS));
         }
 
-        ExecutorService pool = Executors.newFixedThreadPool(6);
+        ExecutorService pool = Executors.newFixedThreadPool(4);
         List<Callable<List<String>>> tasks = new ArrayList<>();
         for (Worker worker : workers) {
             tasks.add(() -> {

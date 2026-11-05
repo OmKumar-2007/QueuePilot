@@ -51,7 +51,8 @@ record QueuePilotProperties(
         @DefaultValue("10000") long workerTimeoutMs,
         @DefaultValue("true") boolean recoveryEnabled,
         @DefaultValue("target/worker/queuepilot-worker-1.0.0-exec.jar") Path workerJar,
-        @DefaultValue("150") long launchedWorkerPaceMs) {
+        @DefaultValue("150") long launchedWorkerPaceMs,
+        @DefaultValue("4") int maxWorkers) {
 }
 
 /** Beans for the framework-free core classes, plus an injectable clock so time can be controlled in tests. */

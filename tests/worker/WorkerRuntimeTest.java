@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class WorkerRuntimeTest {
 
@@ -46,6 +47,14 @@ class WorkerRuntimeTest {
         WorkerConfig config = new WorkerConfig("http://unused", "test-worker", slots, null, workDir, paceMs, freezeMs);
         runtime = new WorkerRuntime(config, coordinator, registry);
         runtime.start();
+    }
+
+    @Test
+    void workerLimitStopsStartupInsteadOfRetrying() {
+        coordinator.registerFailure = new CoordinatorApi.CoordinatorException(409, "HTTP 409: Worker limit reached");
+
+        assertThatThrownBy(() -> start(1, new TaskExecutorRegistry(Map.of())))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("Worker limit reached");
     }
 
     private static void await(BooleanSupplier condition, Duration timeout) throws InterruptedException {
