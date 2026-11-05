@@ -1,2 +1,2 @@
-plugins.PrimeSieveTask
-plugins.NQueensTask
+plugins.ExamplePlugin$PrimeSieveTask
+plugins.ExamplePlugin$NQueensTask

@@ -1,10 +1,10 @@
 package benchmarks;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import core.JobTiming;
-import core.MetricsCalculator;
-import core.ScheduleMetrics;
-import core.Stats;
+import core.Scheduling.JobTiming;
+import core.Scheduling.MetricsCalculator;
+import core.Scheduling.ScheduleMetrics;
+import core.Scheduling.Stats;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * it submits a batch of jobs, waits for all of them, and records the coordinator's timestamps.
  * Warm-up runs are executed but excluded from the summary.
  */
-public final class ExecutionBenchmark {
+final class ExecutionBenchmark {
 
     /** One workload: task type plus fixed input, e.g. monte-carlo-pi with 20M samples. */
     public record Workload(String taskType, Map<String, Object> input) {
@@ -206,6 +206,87 @@ public final class ExecutionBenchmark {
         synchronized Sample stop() {
             timer.shutdownNow();
             return new Sample(Stats.of(cpu).mean(), Stats.of(memory).mean());
+        }
+    }
+}
+
+/**
+ * Starts and stops the worker processes for one benchmark configuration. Without a worker jar the
+ * benchmark uses whatever workers are already online and reports that in its config.
+ */
+final class WorkerProcesses implements AutoCloseable {
+
+    private final List<Process> processes = new ArrayList<>();
+    private final int totalSlots;
+
+    private WorkerProcesses(int totalSlots) {
+        this.totalSlots = totalSlots;
+    }
+
+    static WorkerProcesses start(ExecutionBenchmark.Config config, int count, ApiClient api)
+            throws IOException, InterruptedException {
+        if (config.workerJar() == null) {
+            return new WorkerProcesses(onlineSlots(api, null));
+        }
+        String runId = "bench-" + System.currentTimeMillis() + "-";
+        WorkerProcesses started = new WorkerProcesses(count * config.slotsPerWorker());
+        Path logDir = Path.of("benchmark-results", "worker-logs");
+        logDir.toFile().mkdirs();
+        for (int i = 0; i < count; i++) {
+            String name = runId + i;
+            ProcessBuilder builder = new ProcessBuilder(javaExecutable(), "-jar", config.workerJar().toString(),
+                    "--coordinator", config.coordinatorUrl(), "--name", name,
+                    "--slots", String.valueOf(config.slotsPerWorker()),
+                    "--work-dir", Path.of("benchmark-results", "work", name).toString())
+                    .redirectErrorStream(true)
+                    .redirectOutput(logDir.resolve(name + ".log").toFile());
+            started.processes.add(builder.start());
+        }
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (onlineSlots(api, runId) < count * config.slotsPerWorker()) {
+            if (System.currentTimeMillis() > deadline) {
+                started.close();
+                throw new IOException("Workers did not come online within 60 s (see benchmark-results/worker-logs)");
+            }
+            Thread.sleep(500);
+        }
+        return started;
+    }
+
+    /** Slots of ONLINE workers, optionally only those whose name starts with {@code prefix}. */
+    private static int onlineSlots(ApiClient api, String prefix) throws IOException, InterruptedException {
+        int slots = 0;
+        Set<String> seen = new HashSet<>();
+        for (JsonNode worker : api.get("/api/workers")) {
+            boolean matches = prefix == null || worker.get("name").asText().startsWith(prefix);
+            if (matches && "ONLINE".equals(worker.get("status").asText()) && seen.add(worker.get("id").asText())) {
+                slots += worker.get("concurrencyLimit").asInt();
+            }
+        }
+        return slots;
+    }
+
+    private static String javaExecutable() {
+        return Path.of(System.getProperty("java.home"), "bin", "java").toString();
+    }
+
+    int totalSlots() {
+        return Math.max(1, totalSlots);
+    }
+
+    @Override
+    public void close() {
+        for (Process process : processes) {
+            process.destroy();
+        }
+        for (Process process : processes) {
+            try {
+                if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 }

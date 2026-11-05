@@ -1,6 +1,6 @@
 # Adding a Task Type
 
-This is exactly how the example plugin in `src/plugins/` (prime sieve) was added. No file in the coordinator, core or worker changes.
+This is exactly how the example plugin in `src/plugins/ExamplePlugin.java` (prime sieve) was added. No file in the coordinator, core or worker changes.
 
 ## 1. Create a plugin project
 
@@ -39,7 +39,7 @@ Rules:
 
 ## 3. Declare it
 
-- `resources/plugins/META-INF/services/taskapi.TaskExecutor` containing `plugins.PrimeSieveTask`
+- `resources/plugins/META-INF/services/taskapi.TaskExecutor` containing `plugins.ExamplePlugin$PrimeSieveTask` (a nested class is written with `$`; a normal top-level class is just `mypackage.MyTask`)
 - `resources/plugins/META-INF/queuepilot/tasks/prime-sieve.json`: the manifest (schema, capabilities, timeout, retries, …)
 
 ## 4. Build and install on a worker
@@ -64,7 +64,7 @@ curl -u admin:$QP_ADMIN_PASSWORD -H "Content-Type: application/json" \
 
 Submit job → *Prime sieve* → limit 50000000. Only workers that advertise `prime-sieve@1.0.0` will receive it.
 
-To ship it as a built-in instead, add the class to `src/tasks/` and the manifest to `resources/tasks/META-INF/queuepilot/tasks/`; the coordinator seeds it at startup.
+To ship it as a built-in instead, add the class to `src/tasks/BuiltinTasks.java`, list it in `resources/tasks/META-INF/services/taskapi.TaskExecutor`, and put the manifest in `resources/tasks/META-INF/queuepilot/tasks/`; the coordinator seeds it at startup.
 
 ## Non-Java tasks (containers, Phase 9)
 

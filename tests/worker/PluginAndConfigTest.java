@@ -1,5 +1,7 @@
 package worker;
 
+import worker.WorkerMain.TaskExecutorRegistry;
+import worker.WorkerMain.WorkerConfig;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -41,7 +43,7 @@ class PluginAndConfigTest {
         try (TaskExecutorRegistry registry = TaskExecutorRegistry.load(pluginsDir)) {
             assertThat(registry.taskTypes()).contains("prime-sieve", "sorting");
             var output = registry.find("prime-sieve").orElseThrow()
-                    .execute(new taskapi.TaskInput(Map.of("limit", 100)), new NoOpContext());
+                    .execute(new taskapi.TaskExecutor.TaskInput(Map.of("limit", 100)), new NoOpContext());
             assertThat(output.values().get("primeCount")).isEqualTo(25L);
         }
     }
@@ -54,7 +56,7 @@ class PluginAndConfigTest {
     }
 
 
-    private static final class NoOpContext implements taskapi.TaskContext {
+    private static final class NoOpContext implements taskapi.TaskExecutor.TaskContext {
         public void reportProgress(int percent, String message) { }
         public boolean isCancelled() { return false; }
         public Path workDirectory() { return Path.of("."); }

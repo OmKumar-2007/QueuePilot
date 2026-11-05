@@ -32,7 +32,7 @@ The script exits with code 0 when every job ended as expected, and 1 otherwise. 
 
 ## The N-Queens task
 
-`n-queens@1.0.0` lives in `src/plugins/` (`plugins.NQueensTask`). It was added without changing the coordinator, the core or the worker:
+`n-queens@1.0.0` lives in `src/plugins/ExamplePlugin.java` (`ExamplePlugin.NQueensTask`). It was added without changing the coordinator, the core or the worker:
 
 1. Implement `TaskExecutor`. Counting uses bitmask backtracking, the search is split into one branch per placement of the first two queens, and progress is reported per branch.
 2. Add it to `META-INF/services/taskapi.TaskExecutor`, and add the manifest `META-INF/queuepilot/tasks/n-queens.json`.

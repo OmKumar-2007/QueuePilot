@@ -2,9 +2,9 @@ package coordinator;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import worker.HttpCoordinatorClient;
-import worker.TaskExecutorRegistry;
-import worker.WorkerConfig;
+import worker.CoordinatorApi.HttpCoordinatorClient;
+import worker.WorkerMain.TaskExecutorRegistry;
+import worker.WorkerMain.WorkerConfig;
 import worker.WorkerRuntime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

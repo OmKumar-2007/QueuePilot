@@ -1,8 +1,9 @@
 package tasks;
 
-import taskapi.TaskFailure;
-import taskapi.TaskInput;
-import taskapi.TaskOutput;
+import tasks.BuiltinTasks.JavaScriptTask;
+import taskapi.TaskExecutor.TaskFailure;
+import taskapi.TaskExecutor.TaskInput;
+import taskapi.TaskExecutor.TaskOutput;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;

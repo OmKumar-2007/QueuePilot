@@ -123,7 +123,7 @@ flowchart TB
 | `AttemptService` | Heartbeat, progress, complete, fail — all fenced by attempt ID + token | Stale token → 409, no change |
 | `RecoveryMonitor` | Every *n* s: expire leases, time out attempts, mark silent workers `OFFLINE`, promote `SCHEDULED`→`QUEUED`, apply retry/backoff | Runs in one thread; each recovery action in its own transaction |
 | `WorkerRegistryService` | Registration, tokens, capabilities, drain/disable, failure simulation | Re-registration after `OFFLINE` gets a fresh token |
-| `ArtifactStorage` | `store / open / delete` files by ID; `LocalFileArtifactStorage` in v1.0 | Size limit, path never derived from user input |
+| `ArtifactStorage` | `store / open / delete` files by ID in a local folder | Size limit, path never derived from user input |
 | `EventLog` | Append-only system events for dashboard history | Written in the same transaction as the change it describes |
 
 ## 5. Package structure
@@ -132,13 +132,13 @@ flowchart TB
 queuepilot/
 ├── pom.xml                  (parent: dependency versions and the shared build layout)
 ├── src/                     one flat folder per module; the folder name is the Java package
-│   ├── taskapi/             TaskExecutor, TaskContext, TaskInput, TaskOutput, TaskFailure, ...
-│   ├── core/                job states, scheduling policies, DAG, input schemas, protocol, metrics
-│   ├── tasks/               built-in tasks: sorting, text analysis, Monte Carlo pi, checksum, JavaScript
-│   ├── plugins/             example third-party plugin: prime sieve, N-Queens
-│   ├── coordinator/         REST controllers, services, repositories, scheduler, recovery
-│   ├── worker/              WorkerMain, WorkerConfig, WorkerRuntime, TaskExecutorRegistry, ...
-│   └── benchmarks/          simulation, real execution runs, reports
+│   ├── taskapi/             TaskExecutor.java, with TaskContext, TaskInput, TaskOutput, TaskFailure, ... nested inside
+│   ├── core/                Jobs, Scheduling, Validation, WorkerProtocol
+│   ├── tasks/               BuiltinTasks: sorting, text analysis, Monte Carlo pi, checksum, JavaScript
+│   ├── plugins/             ExamplePlugin: prime sieve, N-Queens
+│   ├── coordinator/         Controllers, Entities, Repositories, Errors, JobServices, WorkerServices, MonitoringServices
+│   ├── worker/              WorkerMain, WorkerRuntime, CoordinatorApi
+│   └── benchmarks/          BenchmarkMain, SimulationBenchmark, ExecutionBenchmark
 ├── tests/                   same folders as src/, same packages
 └── resources/
     ├── coordinator/         application.yml, db/migration (Flyway), static/ (dashboard)
@@ -148,7 +148,7 @@ queuepilot/
 
 Each `src/<name>/` holds a small `pom.xml`, so each module still builds its own jar under `target/<name>/`. All modules share the `src/` source root, because a Java package must match its folder; the parent `pom.xml` limits each module to its own folder and its declared dependencies.
 
-Classes inside the coordinator are grouped by name prefix (`Job*`, `Worker*`, `Task*`) rather than by sub-folder.
+Each folder keeps related classes together in a few files. Inside a package, classes are package-private where possible; a type that other modules need is a public nested class (for example `core.Jobs.JobState`), because a Java file can only have one public top-level type.
 
 ## 6. Core classes
 

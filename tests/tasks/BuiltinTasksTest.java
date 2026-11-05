@@ -1,9 +1,13 @@
 package tasks;
 
+import tasks.BuiltinTasks.FileChecksumTask;
+import tasks.BuiltinTasks.MonteCarloPiTask;
+import tasks.BuiltinTasks.SortingTask;
+import tasks.BuiltinTasks.TextAnalysisTask;
 import taskapi.TaskExecutor;
-import taskapi.TaskFailure;
-import taskapi.TaskInput;
-import taskapi.TaskOutput;
+import taskapi.TaskExecutor.TaskFailure;
+import taskapi.TaskExecutor.TaskInput;
+import taskapi.TaskExecutor.TaskOutput;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

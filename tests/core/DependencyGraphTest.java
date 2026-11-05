@@ -1,5 +1,7 @@
 package core;
 
+import core.Jobs.CycleDetectedException;
+import core.Jobs.DependencyGraph;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

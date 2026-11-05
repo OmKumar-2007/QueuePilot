@@ -30,19 +30,19 @@ Java 21 · Spring Boot 3.3 · Spring Data JPA + Flyway · PostgreSQL (H2 in Post
 
 ```
 src/                 all Java code; each folder is one module and one package
-  taskapi/           plugin contract (no dependencies)
-  core/              scheduling policies, DAG, state machine, schemas, protocol, metrics (no Spring)
-  tasks/             built-in task plugins
-  plugins/           example third-party plugin, built only against taskapi
-  coordinator/       Spring Boot REST API, persistence, scheduler, recovery
-  worker/            standalone worker process
-  benchmarks/        standalone benchmark runner
+  taskapi/           plugin contract, all in TaskExecutor.java (no dependencies)
+  core/              Jobs (states, retries, DAG), Scheduling (policies, metrics), Validation, WorkerProtocol (no Spring)
+  tasks/             built-in task plugins, all in BuiltinTasks.java
+  plugins/           example third-party plugin, built only against taskapi (ExamplePlugin.java)
+  coordinator/       Spring Boot app: Controllers, Entities, Repositories, Errors, JobServices, WorkerServices, MonitoringServices
+  worker/            standalone worker process: WorkerMain, WorkerRuntime, CoordinatorApi
+  benchmarks/        standalone benchmark runner: BenchmarkMain, SimulationBenchmark, ExecutionBenchmark
 tests/               tests, with the same folders as src/
 resources/           non-Java files: config, database migrations, dashboard, task manifests
 target/              build output, for example target/coordinator/ and target/worker/
 ```
 
-Each folder in `src/` has its own small `pom.xml`, so the coordinator, the worker and the plugin stay separate jars.
+Related classes share a file, so each folder has only a few. Each folder in `src/` also has its own small `pom.xml`, so the coordinator, the worker and the plugin stay separate jars.
 
 ## Quick start
 
@@ -78,7 +78,7 @@ Or start everything at once with `scripts/start-demo.ps1` (Windows) / `scripts/s
 ./mvnw verify
 ```
 
-108 tests, all passing: unit tests for policies, aging, fairness, DAG, schemas, retry and metrics; plugin tests (including the JavaScript task, skipped if Node.js is missing); worker runtime tests (concurrency, timeouts, revocation, plugin loading); coordinator integration tests over the real HTTP API (validation, plugin matching, concurrent claims, lease expiry, stale-attempt rejection, retry limits, timeouts, workflows, artifacts); end-to-end tests with four real worker runtimes over HTTP (concurrency, interrupt and retry, pause and resume, freeze and recovery); one test against a real PostgreSQL server (embedded binaries). See [testing strategy](docs/testing/testing-strategy.md).
+113 tests, all passing: unit tests for policies, aging, fairness, DAG, schemas, retry and metrics; plugin tests (including the JavaScript task, skipped if Node.js is missing); worker runtime tests (concurrency, timeouts, revocation, plugin loading); coordinator integration tests over the real HTTP API (validation, plugin matching, concurrent claims, lease expiry, stale-attempt rejection, retry limits, timeouts, workflows, artifacts); end-to-end tests with four real worker runtimes over HTTP (concurrency, interrupt and retry, pause and resume, freeze and recovery); one test against a real PostgreSQL server (embedded binaries). See [testing strategy](docs/testing/testing-strategy.md).
 
 ## Documentation
 

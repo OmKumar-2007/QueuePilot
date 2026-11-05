@@ -1,24 +1,46 @@
 package worker;
 
-import core.WorkerProtocol;
 import core.WorkerProtocol.Assignment;
+import core.WorkerProtocol.CompletionReport;
+import core.WorkerProtocol.FailureReport;
 import core.WorkerProtocol.HeartbeatResponse;
+import core.WorkerProtocol.ProgressReport;
 import core.WorkerProtocol.RegisterRequest;
 import core.WorkerProtocol.RegisterResponse;
-import worker.WorkerTaskContext.CancelReason;
+import core.WorkerProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import taskapi.TaskExecutor.TaskContext;
+import taskapi.TaskExecutor.TaskFailure;
+import taskapi.TaskExecutor.TaskInput;
+import taskapi.TaskExecutor.TaskOutput;
+import taskapi.TaskExecutor;
+import worker.WorkerMain.TaskExecutorRegistry;
+import worker.WorkerMain.WorkerConfig;
+import worker.WorkerTaskContext.CancelReason;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 
 /**
- * Wires a worker together and runs its three activities:
+ * Wires a worker together and runs its activities:
  * <ul>
  *   <li><b>commands</b> from the coordinator (on heartbeat replies): PAUSE / RESUME, INTERRUPT,
  *       FREEZE (stop heartbeating for a while), KILL (exit abruptly), REREGISTER,</li>
@@ -219,6 +241,334 @@ public class WorkerRuntime {
             Thread.currentThread().interrupt();
         } catch (CoordinatorApi.CoordinatorException e) {
             log.warn("Deregistration failed: {}", e.getMessage());
+        }
+    }
+}
+
+/**
+ * Executes one assignment on a pool thread: picks the executor, enforces the timeout, reports the
+ * outcome and always cleans up. The outcome reported depends on why the task stopped:
+ * <ul>
+ *   <li>finished normally -> complete</li>
+ *   <li>threw {@link TaskFailure} -> fail (retryable flag from the task)</li>
+ *   <li>local timeout -> fail with TIMEOUT (retryable)</li>
+ *   <li>interrupted by an administrator -> fail with INTERRUPTED (retryable, so it is requeued)</li>
+ *   <li>revoked by the coordinator or shutdown -> report nothing; the attempt is no longer ours</li>
+ * </ul>
+ */
+class AttemptRunner implements Runnable {
+
+    private static final Logger log = LoggerFactory.getLogger(AttemptRunner.class);
+
+    private final Assignment assignment;
+    private final TaskExecutorRegistry registry;
+    private final CoordinatorApi api;
+    private final ActiveAttempts active;
+    private final ScheduledExecutorService timer;
+    private final Path workRoot;
+    private final long paceMsPerPercent;
+    private final PauseGate pauseGate;
+    private final Runnable onFinished;
+
+    public AttemptRunner(Assignment assignment, TaskExecutorRegistry registry, CoordinatorApi api, ActiveAttempts active, ScheduledExecutorService timer, Path workRoot,
+                         long paceMsPerPercent, PauseGate pauseGate, Runnable onFinished) {
+        this.assignment = assignment;
+        this.registry = registry;
+        this.api = api;
+        this.active = active;
+        this.timer = timer;
+        this.workRoot = workRoot;
+        this.paceMsPerPercent = paceMsPerPercent;
+        this.pauseGate = pauseGate;
+        this.onFinished = onFinished;
+    }
+
+    @Override
+    public void run() {
+        Thread thread = Thread.currentThread();
+        Path workDir = workRoot.resolve(assignment.attemptId());
+        WorkerTaskContext context = new WorkerTaskContext(api, assignment, workDir, paceMsPerPercent, pauseGate);
+        active.add(assignment.attemptId(), context);
+        ScheduledFuture<?> timeout = timer.schedule(() -> {
+            context.cancel(CancelReason.TIMED_OUT);
+            thread.interrupt();
+        }, assignment.timeoutSeconds(), TimeUnit.SECONDS);
+
+        log.info("Attempt {} of job {} ({}) started", assignment.attemptNumber(), assignment.jobId(), assignment.taskType());
+        try {
+            Files.createDirectories(workDir);
+            TaskOutput output = execute(context);
+            context.reportProgress(100, "Finishing");
+            if (context.isCancelled()) {
+                reportStopped(context, "Task returned after being cancelled");
+            } else {
+                Map<String, Object> values = new LinkedHashMap<>(output.values());
+                if (paceMsPerPercent > 0) {
+                    // Make paced (demo) runs recognisable in the job output.
+                    values.put("demoPacingMsPerPercent", paceMsPerPercent);
+                }
+                boolean accepted = api.complete(assignment.attemptId(), new CompletionReport(values, output.artifactIds()));
+                log.info("Attempt {} of job {} completed{}", assignment.attemptNumber(), assignment.jobId(),
+                        accepted ? "" : " but the coordinator rejected the result (stale attempt)");
+            }
+        } catch (TaskFailure failure) {
+            if (context.isCancelled()) {
+                reportStopped(context, failure.getMessage());
+            } else {
+                report(failure.getCode(), failure.getMessage(), failure.isRetryable());
+            }
+        } catch (OutOfMemoryError e) {
+            report("OUT_OF_MEMORY", "Task ran out of memory", true);
+        } catch (Exception e) {
+            if (context.isCancelled()) {
+                reportStopped(context, e.toString());
+            } else {
+                log.warn("Attempt {} crashed", assignment.attemptId(), e);
+                report("EXECUTION_ERROR", e.toString(), true);
+            }
+        } finally {
+            timeout.cancel(false);
+            Thread.interrupted();
+            active.remove(assignment.attemptId());
+            deleteQuietly(workDir);
+            onFinished.run();
+        }
+    }
+
+    private TaskOutput execute(WorkerTaskContext context) throws TaskFailure {
+        TaskExecutor executor = registry.find(assignment.taskType()).orElseThrow(() ->
+                TaskFailure.retryable("NO_EXECUTOR", "Worker has no implementation of " + assignment.taskType()));
+        return executor.execute(new TaskInput(assignment.input()), context);
+    }
+
+    private void reportStopped(WorkerTaskContext context, String detail) {
+        if (context.cancelReason() == CancelReason.TIMED_OUT) {
+            report("TIMEOUT", "Exceeded " + assignment.timeoutSeconds() + "s", true);
+        } else if (context.cancelReason() == CancelReason.INTERRUPTED) {
+            report("INTERRUPTED", "Interrupted by an administrator", true);
+        } else {
+            log.info("Attempt {} stopped ({}): {}", assignment.attemptId(), context.cancelReason(), detail);
+        }
+    }
+
+    private void report(String code, String message, boolean retryable) {
+        try {
+            api.fail(assignment.attemptId(), new FailureReport(code, message, retryable));
+            log.info("Attempt {} of job {} failed: {} {}", assignment.attemptNumber(), assignment.jobId(), code, message);
+        } catch (CoordinatorApi.CoordinatorException e) {
+            log.warn("Could not report failure of attempt {}: {}", assignment.attemptId(), e.getMessage());
+        }
+    }
+
+    static void deleteQuietly(Path dir) {
+        if (!Files.exists(dir)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(dir)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    log.debug("Could not delete {}", path);
+                }
+            });
+        } catch (IOException e) {
+            log.debug("Could not clean {}", dir);
+        }
+    }
+}
+
+/**
+ * The {@link TaskContext} handed to a plugin for one attempt.
+ *
+ * <p>Progress reports are the task's checkpoints, so this is where the worker applies:</p>
+ * <ul>
+ *   <li><b>pause</b>: a paused worker holds the task here until it is resumed,</li>
+ *   <li><b>demo pacing</b> (optional, {@code --pace-ms}): waits {@code paceMsPerPercent} for every
+ *       percent of progress, so jobs are slow enough to watch. The work itself is unchanged and the
+ *       job output records the pacing, so paced runs are never mistaken for real speed,</li>
+ *   <li><b>throttling</b>: at most one progress call per {@value #MIN_REPORT_INTERVAL_MS} ms.</li>
+ * </ul>
+ */
+class WorkerTaskContext implements TaskContext {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkerTaskContext.class);
+    static final long MIN_REPORT_INTERVAL_MS = 300;
+    private static final long SLEEP_SLICE_MS = 50;
+
+    /** Why an attempt must stop. */
+    public enum CancelReason { REVOKED, TIMED_OUT, INTERRUPTED, SHUTDOWN }
+
+    private final CoordinatorApi api;
+    private final Assignment assignment;
+    private final Path workDir;
+    private final long paceMsPerPercent;
+    private final PauseGate pauseGate;
+    private final AtomicReference<CancelReason> cancelReason = new AtomicReference<>();
+    private final Map<String, Path> downloaded = new ConcurrentHashMap<>();
+    private long lastReportMillis;
+    private int pacedPercent;
+
+    public WorkerTaskContext(CoordinatorApi api, Assignment assignment, Path workDir, long paceMsPerPercent, PauseGate pauseGate) {
+        this.api = api;
+        this.assignment = assignment;
+        this.workDir = workDir;
+        this.paceMsPerPercent = paceMsPerPercent;
+        this.pauseGate = pauseGate;
+    }
+
+    @Override
+    public synchronized void reportProgress(int percent, String message) {
+        if (isCancelled()) {
+            return;
+        }
+        waitWhilePaused();
+        if (paceMsPerPercent <= 0) {
+            send(percent, message);
+            return;
+        }
+        for (int step = pacedPercent + 1; step <= percent && !isCancelled(); step++) {
+            sleepQuietly(paceMsPerPercent);
+            waitWhilePaused();
+            send(step, message);
+        }
+        pacedPercent = Math.max(pacedPercent, percent);
+    }
+
+    private void send(int percent, String message) {
+        long now = System.currentTimeMillis();
+        if (isCancelled() || (percent < 100 && now - lastReportMillis < MIN_REPORT_INTERVAL_MS)) {
+            return;
+        }
+        lastReportMillis = now;
+        try {
+            boolean accepted = api.progress(assignment.attemptId(), new ProgressReport(percent, message));
+            if (!accepted) {
+                cancel(CancelReason.REVOKED);
+            }
+        } catch (CoordinatorApi.CoordinatorException e) {
+            log.warn("Progress report for attempt {} failed: {}", assignment.attemptId(), e.getMessage());
+        }
+    }
+
+    private void waitWhilePaused() {
+        try {
+            pauseGate.awaitOpen(this::isCancelled);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Sleeps in short slices so cancellation is noticed quickly. */
+    private void sleepQuietly(long millis) {
+        long end = System.currentTimeMillis() + millis;
+        try {
+            while (!isCancelled() && System.currentTimeMillis() < end) {
+                Thread.sleep(Math.min(SLEEP_SLICE_MS, Math.max(1, end - System.currentTimeMillis())));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Override
+    public boolean isCancelled() {
+        return cancelReason.get() != null;
+    }
+
+    public void cancel(CancelReason reason) {
+        cancelReason.compareAndSet(null, reason);
+    }
+
+    public CancelReason cancelReason() {
+        return cancelReason.get();
+    }
+
+    @Override
+    public Path workDirectory() {
+        return workDir;
+    }
+
+    @Override
+    public Path inputFile(String artifactId) throws IOException {
+        Path cached = downloaded.get(artifactId);
+        if (cached != null) {
+            return cached;
+        }
+        Path target = Files.createDirectories(workDir.resolve("inputs")).resolve(artifactId);
+        api.downloadInput(assignment.attemptId(), artifactId, target);
+        downloaded.put(artifactId, target);
+        return target;
+    }
+
+    @Override
+    public String saveOutputFile(Path file, String contentType) throws IOException {
+        return api.uploadOutput(assignment.attemptId(), file, contentType);
+    }
+}
+
+/**
+ * Attempts currently executing in this worker. Shared by the pool threads (add/remove), the
+ * heartbeat thread (list/revoke) and shutdown, hence a concurrent map.
+ */
+class ActiveAttempts {
+
+    private final Map<String, WorkerTaskContext> attempts = new ConcurrentHashMap<>();
+
+    public void add(String attemptId, WorkerTaskContext context) {
+        attempts.put(attemptId, context);
+    }
+
+    public void remove(String attemptId) {
+        attempts.remove(attemptId);
+    }
+
+    public List<String> ids() {
+        return List.copyOf(attempts.keySet());
+    }
+
+    public void cancel(String attemptId, WorkerTaskContext.CancelReason reason) {
+        WorkerTaskContext context = attempts.get(attemptId);
+        if (context != null) {
+            context.cancel(reason);
+        }
+    }
+
+    public void cancelAll(WorkerTaskContext.CancelReason reason) {
+        attempts.values().forEach(context -> context.cancel(reason));
+    }
+
+    public int size() {
+        return attempts.size();
+    }
+}
+
+/**
+ * Lets an administrator pause a worker. While paused, the claim loop takes no new work and running
+ * tasks wait at their next progress checkpoint. Heartbeats continue, so the coordinator keeps the
+ * leases alive: a paused worker is healthy, just not making progress.
+ */
+class PauseGate {
+
+    private boolean paused;
+
+    public synchronized void pause() {
+        paused = true;
+    }
+
+    public synchronized void resume() {
+        paused = false;
+        notifyAll();
+    }
+
+    public synchronized boolean isPaused() {
+        return paused;
+    }
+
+    /** Blocks while paused, returning early as soon as {@code stopWaiting} becomes true. */
+    public synchronized void awaitOpen(BooleanSupplier stopWaiting) throws InterruptedException {
+        while (paused && !stopWaiting.getAsBoolean()) {
+            wait(100);
         }
     }
 }

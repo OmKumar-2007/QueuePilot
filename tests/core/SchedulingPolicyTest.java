@@ -1,5 +1,10 @@
 package core;
 
+import core.Scheduling.FcfsPolicy;
+import core.Scheduling.PolicyType;
+import core.Scheduling.PriorityAgingPolicy;
+import core.Scheduling.SchedulableJob;
+import core.Scheduling.SjfPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

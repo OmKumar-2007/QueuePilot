@@ -1,9 +1,10 @@
 package plugins;
 
-import taskapi.TaskContext;
-import taskapi.TaskFailure;
-import taskapi.TaskInput;
-import taskapi.TaskOutput;
+import plugins.ExamplePlugin.NQueensTask;
+import taskapi.TaskExecutor.TaskContext;
+import taskapi.TaskExecutor.TaskFailure;
+import taskapi.TaskExecutor.TaskInput;
+import taskapi.TaskExecutor.TaskOutput;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

@@ -1,11 +1,13 @@
 package worker;
 
+import worker.WorkerMain.TaskExecutorRegistry;
+import worker.WorkerMain.WorkerConfig;
 import core.WorkerProtocol;
-import taskapi.TaskContext;
+import taskapi.TaskExecutor.TaskContext;
 import taskapi.TaskExecutor;
-import taskapi.TaskFailure;
-import taskapi.TaskInput;
-import taskapi.TaskOutput;
+import taskapi.TaskExecutor.TaskFailure;
+import taskapi.TaskExecutor.TaskInput;
+import taskapi.TaskExecutor.TaskOutput;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,7 +65,7 @@ class WorkerRuntimeTest {
             public TaskOutput execute(TaskInput input, TaskContext context) throws TaskFailure {
                 started.countDown();
                 long steps = input.getLong("steps", 100);
-                var tracker = new taskapi.ProgressTracker(context, steps);
+                var tracker = new taskapi.TaskExecutor.ProgressTracker(context, steps);
                 for (long i = 1; i <= steps; i++) {
                     try {
                         Thread.sleep(input.getLong("stepMs", 0));

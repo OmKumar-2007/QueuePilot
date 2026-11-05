@@ -58,7 +58,7 @@ public abstract class CoordinatorTestBase {
     @Autowired protected MutableClock clock;
     @Autowired protected RecoveryMonitor recovery;
     @Autowired protected SchedulerSettingsService schedulerSettings;
-    @Autowired protected core.QueueRotation queueRotation;
+    @Autowired protected core.Scheduling.QueueRotation queueRotation;
 
     @BeforeEach
     void resetDatabase() {

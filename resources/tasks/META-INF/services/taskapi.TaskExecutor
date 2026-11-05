@@ -1,5 +1,5 @@
-tasks.SortingTask
-tasks.TextAnalysisTask
-tasks.MonteCarloPiTask
-tasks.FileChecksumTask
-tasks.JavaScriptTask
+tasks.BuiltinTasks$SortingTask
+tasks.BuiltinTasks$TextAnalysisTask
+tasks.BuiltinTasks$MonteCarloPiTask
+tasks.BuiltinTasks$FileChecksumTask
+tasks.BuiltinTasks$JavaScriptTask

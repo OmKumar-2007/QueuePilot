@@ -1,5 +1,9 @@
 package taskapi;
 
+import taskapi.TaskExecutor.ProgressTracker;
+import taskapi.TaskExecutor.TaskContext;
+import taskapi.TaskExecutor.TaskFailure;
+import taskapi.TaskExecutor.TaskInput;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

@@ -1,9 +1,9 @@
 package benchmarks;
 
 import benchmarks.WorkloadGenerator.Scenario;
-import core.FcfsPolicy;
-import core.PriorityAgingPolicy;
-import core.SjfPolicy;
+import core.Scheduling.FcfsPolicy;
+import core.Scheduling.PriorityAgingPolicy;
+import core.Scheduling.SjfPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
