@@ -37,7 +37,7 @@ The script exits with code 0 when every job ended as expected, and 1 otherwise. 
 1. Implement `TaskExecutor`. Counting uses bitmask backtracking, the search is split into one branch per placement of the first two queens, and progress is reported per branch.
 2. Add it to `META-INF/services/taskapi.TaskExecutor`, and add the manifest `META-INF/queuepilot/tasks/n-queens.json`.
 3. Build the jar, copy it into a worker's plugins folder (`data/plugins-worker-1`) and restart that worker. It then advertises `n-queens@1.0.0`.
-4. On the **Tasks** page, paste the manifest under *Register a new task type*, open the new task and click **Enable**.
+4. Register the manifest with `POST /api/admin/tasks` (see [Adding a task type](adding-a-task-type.md)). `simulate_jobs.py` does this for you.
 5. Submit it from **Submit**: `n = 8` returns 92 solutions and the first board; `n = 3` with `requireSolution` fails with `NO_SOLUTION`.
 
 Unit tests check the counts against the known sequence for n = 1…12 (OEIS A000170), check that the first solution is valid, and check the failure case.

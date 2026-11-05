@@ -81,7 +81,7 @@ Field types supported by the built-in validator (ADR-007): `STRING`, `INTEGER`, 
 1. Create a Maven project depending only on `queuepilot-task-api`.
 2. Implement `TaskExecutor`; add the `META-INF/services` line and the manifest.
 3. `mvn package` → drop the jar into the worker's plugins folder (`--plugins`, default `./plugins`), restart that worker.
-4. In the dashboard (Task Registry → Register), paste/upload the manifest; enable it.
+4. Register the manifest with `POST /api/admin/tasks`.
 5. Submit a job. **No change** to the coordinator, scheduler or core.
 
 Phase 5 ends with a test that proves step 5 by adding a `prime-sieve` task in a separate module.

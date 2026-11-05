@@ -50,12 +50,12 @@ Rules:
 
 Copy `target/plugins/queuepilot-example-plugin-1.0.0.jar` into a plugins folder and (re)start a worker with `--plugins <folder>`. Its log shows `Loaded task implementations: [..., prime-sieve@1.0.0, ...]`.
 
-## 5. Register and enable
+## 5. Register
 
-Dashboard → **Task registry** → paste the manifest → *Register*, then open it and *Enable*. Or:
+The dashboard only lists task types, so register a new one through the API:
 
 ```bash
-curl -u admin:$QP_ADMIN_PASSWORD -H "Content-Type: application/json" \
+curl -H "Content-Type: application/json" \
      --data @resources/plugins/META-INF/queuepilot/tasks/prime-sieve.json \
      http://localhost:8080/api/admin/tasks
 ```
